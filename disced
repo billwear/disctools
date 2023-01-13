@@ -1,0 +1,227 @@
+#!/bin/bash
+# $1 = git master markdown filename, absolute path
+
+# preset flag for "rescue the staged version from last time" to false
+rescue_staged=false
+
+# master markdown absolute pathname
+GIT_MD_ABSPATH=$1
+
+while getopts s flag
+do
+    case "${flag}" in
+        s) rescue_staged=true;;
+    esac
+done
+
+if $rescue_staged ; then
+    echo "substituting previously staged file for git original"
+    GIT_MD_ABSPATH=$2
+fi
+
+# MAAS version desired
+VERSION="main"
+
+# workbench dir
+BENCH="/tmp/bench"
+
+# staging directory, if we get that far
+STAGE="/tmp/staging"
+
+# staging topic number (galley proof topic, etc)
+GALLEY="4917"
+
+# conversion logging directory, if we get that far
+LOG="$STAGE/log/tab2html.log"
+
+# path to master markdown
+GIT_MD_DIR="$(dirname "${GIT_MD_ABSPATH}")"
+
+# compute path git repo root, for production html, if we get that far
+GIT_REPO_ROOT="$GIT_MD_DIR/.."
+
+# get base filename
+GIT_MD_BASENAME="$(basename "${GIT_MD_ABSPATH}")"
+
+# peel topic number out of basename
+NAME=$(echo "$GIT_MD_BASENAME" | cut -f 1 -d '.')
+TOPIC_NUMBER=$(echo "$NAME" | rev | cut -f 1 -d'-' | rev)
+
+# compute name of html file
+HTMLNAME=$(echo "$NAME" | rev | cut -f 2- -d'-' | rev)".html"
+
+# always convert "maas-documentation.html" to "maas-documentation-25.html"
+if [ $HTMLNAME == "maas-documentation.html" ]
+then
+    HTMLNAME="maas-documentation-25.html"
+fi
+
+# testcase
+echo "HTMLNAME = $HTMLNAME"
+
+# sed command to allow UI/CLI iso-page switching
+sedcmd="s/zork/$HTMLNAME/g"
+
+# compute name of file pulled from disc
+DISCNAM=$NAME".discmd"
+
+# create workbench dir
+mkdir -p $BENCH
+
+# clear the workbench
+rm -rf $BENCH/*
+
+## future step: lock post from editing
+
+# pull the topic from disc to bench
+dpull -n $TOPIC_NUMBER > $BENCH/$DISCNAM
+
+# pull the master from git to bench
+cp $GIT_MD_ABSPATH $BENCH/
+
+if $rescue_staged ; then
+    cp "$STAGE/markdown/$GIT_MD_BASENAME" $BENCH/
+fi
+
+# copy the current discourse version into the git repo
+cp $BENCH/$DISCNAM $GIT_REPO_ROOT/src/$GIT_MD_BASENAME
+
+# change to the root of the git repo
+cd $GIT_REPO_ROOT
+
+# stage everything (you may not want to do this every time)
+git add .
+
+# commit the changes
+git commit -m "Updated $GIT_MD_BASENAME to current discourse version"
+
+# push the changes upstream
+## this incantation for when there are two active branches (release + master)
+#git push origin HEAD:master
+#git push origin HEAD
+## this incantation for normal operation mode (just updating master)
+git push
+
+# store the diff in a findable file
+diff $BENCH/$GIT_MD_BASENAME $BENCH/$DISCNAM > $BENCH/md-diff
+
+# open the text editor of your choice with whatever parameters you prefer
+## the point is to temporarily limit focus to the doc being edited atm
+## (how you option / configure this is up to you)
+emacs -q -l /home/stormrider/.emacs2 $BENCH/$DISCNAM $BENCH/$GIT_MD_BASENAME $BENCH/md-diff
+
+# ask whether to stage the changes (n aborts without changing anything)
+read -e -p "Stage changes for review? [Y/n] " YN
+
+# if no, just exit, we're done here for now
+[[ $YN == "n" || $YN == "N" || $YN == "" ]] && exit
+
+## if yes, push changes to staging so they can be checked before final commit
+
+# get the document's title, for HTML purposes (stored in comment, first line)
+read firstline<$BENCH/$GIT_MD_BASENAME
+TITLE=$(sed -e's/^[^"]*\"\([^"]*\).*$/\1/g' <<< $firstline)
+
+# provisionally create staging directory in /tmp
+mkdir -p $STAGE/{log,markdown}
+mkdir -p $STAGE/production-html-{deb,snap}/{cli,ui}/css
+cp $GIT_REPO_ROOT/html-support/css/stylesheet.css $STAGE/production-html-deb/cli/css
+cp $GIT_REPO_ROOT/html-support/css/stylesheet.css $STAGE/production-html-deb/ui/css
+cp $GIT_REPO_ROOT/html-support/css/stylesheet.css $STAGE/production-html-deb/css
+mkdir -p $STAGE/production-html-deb/images
+cp $GIT_REPO_ROOT/html-support/css/stylesheet.css $STAGE/production-html-snap/cli/css
+cp $GIT_REPO_ROOT/html-support/css/stylesheet.css $STAGE/production-html-snap/ui/css
+cp $GIT_REPO_ROOT/html-support/css/stylesheet.css $STAGE/production-html-snap/css
+mkdir -p $STAGE/production-html-snap/images
+
+# capture the markdown so that we can galley it before final commit
+cat $BENCH/$GIT_MD_BASENAME | tee $STAGE/markdown/$GIT_MD_BASENAME | dpush -n $GALLEY
+
+echo "markdown source at file:///$STAGE/markdown/$GIT_MD_BASENAME"
+
+# run the snap ui version of the html
+tab2html "v$VERSION Snap" "UI" "$TITLE" -i $BENCH/$GIT_MD_BASENAME -lllll -L $LOG -o $STAGE/production-html-snap/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/ui/template.html
+sed -i -e"$sedcmd" $STAGE/production-html-snap/ui/$HTMLNAME
+echo "SNAP UI HTML at file:///$STAGE/production-html-snap/ui/$HTMLNAME"
+
+# run the deb ui version of the html; don't do images again
+tab2html "v$VERSION Packages" "UI" "$TITLE" -s -i $BENCH/$GIT_MD_BASENAME -l -L $LOG -o $STAGE/production-html-deb/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/deb/ui/template.html
+sed -i -e"$sedcmd" $STAGE/production-html-deb/ui/$HTMLNAME
+echo "DEB UI HTML at file:///$STAGE/production-html-deb/ui/$HTMLNAME"
+
+# run the snap cli version of the html; don't do images again
+tab2html "v$VERSION Snap" "CLI" "$TITLE" -s -i $BENCH/$GIT_MD_BASENAME -l -L $LOG -o $STAGE/production-html-snap/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/cli/template.html
+sed -i -e"$sedcmd" $STAGE/production-html-snap/cli/$HTMLNAME
+echo "SNAP CLI HTML at file:///$STAGE/production-html-snap/cli/$HTMLNAME"
+
+# run the deb cli version of the html; don't do images again
+tab2html "v$VERSION Packages" "CLI" "$TITLE" -s -i $BENCH/$GIT_MD_BASENAME -l -L $LOG -o $STAGE/production-html-deb/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/cli/template.html
+sed -i -e"$sedcmd" $STAGE/production-html-deb/cli/$HTMLNAME
+echo "DEB CLI HTML at file:///$STAGE/production-html-deb/cli/$HTMLNAME"
+
+# copy images to the production HTML root dirs
+cp /tmp/images/* $STAGE/production-html-snap/images
+cp /tmp/images/* $STAGE/production-html-deb/images
+
+# ask whether to make these changes permanent
+read -e -p "Upload changes to discourse & HTML docs? [Y/n] " YN
+
+# if no, just exit, we're done here for now
+[[ $YN == "n" || $YN == "N" || $YN == "" ]] && exit
+
+## if yes, push changes for real
+# copy the (potentially edited) discourse markdown back to the git repo
+cp $BENCH/$GIT_MD_BASENAME $GIT_MD_ABSPATH
+
+# push the discourse markdown up to the docs discourse
+cat $GIT_MD_ABSPATH | dpush -n $TOPIC_NUMBER
+
+## IMPORTANT NOTE ##############################################################
+# if you enter the script at this point, you may not have images in the
+# production HTML directories, as these images are only generated during staging
+################################################################################
+
+# run the snap ui version of the html to production
+tab2html "v$VERSION Snap" "UI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-snap/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/ui/template.html
+sed -i -e"$sedcmd" $GIT_REPO_ROOT/production-html-snap/ui/$HTMLNAME
+
+# run the deb ui version of the html
+tab2html "v$VERSION Packages" "UI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-deb/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/deb/ui/template.html
+sed -i -e"$sedcmd" $GIT_REPO_ROOT/production-html-deb/ui/$HTMLNAME
+
+# run the snap cli version of the html
+tab2html "v$VERSION Snap" "CLI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-snap/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/cli/template.html
+sed -i -e"$sedcmd" $GIT_REPO_ROOT/production-html-snap/cli/$HTMLNAME
+
+# run the deb cli version of the html
+tab2html "v$VERSION Packages" "CLI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-deb/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/cli/template.html
+sed -i -e"$sedcmd" $GIT_REPO_ROOT/production-html-deb/cli/$HTMLNAME
+
+# copy images to production HTML root
+cp /tmp/images/* $GIT_REPO_ROOT/production-html-snap/images
+cp /tmp/images/* $GIT_REPO_ROOT/production-html-deb/images
+
+# ask whether to automatically update the git repo
+read -e -p "Stage all changes and commit/push git repo? [Y/n] " YN
+
+# if no, just exit, we're done here for now
+[[ $YN == "n" || $YN == "N" || $YN == "" ]] && exit
+
+# change to the root of the git repo
+cd $GIT_REPO_ROOT
+
+# stage everything (you may not want to do this every time)
+git add .
+
+# get a specific commit message for this change
+read -e -p "Specific commit message (1 line)? " GIT_COMMIT_MESSAGE
+
+# commit the changes
+git commit -m "[$HTMLNAME] $GIT_COMMIT_MESSAGE"
+
+# push the changes upstream
+## this incantation for when there are two active branches (release + master)
+# git push origin HEAD:master
+# git push origin HEAD
+## this incantation for normal operation mode (just updating master)
+git push
