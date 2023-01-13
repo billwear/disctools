@@ -1,0 +1,41 @@
+#!/usr/bin/python3
+
+# what libraries does this program need?
+import sys, errno, getopt
+
+# how do we print the usage instructions (and exit)?
+def usage():
+    print('usage: radRsortmods CHECKFILE')
+    sys.exit(errno.EINVAL)
+
+# what is the main execution flow?
+def main():
+
+    target_topics = []
+    target_timestamps = []
+    sorted_list = []
+    
+    for line in sys.stdin:
+        if "==>" in line:
+            if "cpm" in line:
+                sorted_list.append(line.strip())
+            elif "src" in line:
+                sorted_list.append(line.strip())
+            else:
+                target_topics.append(line.strip())
+        else:
+            target_timestamps.append(line.strip())
+
+    for a, b in zip(target_timestamps, target_topics):
+        sorted_list.append(a + b)
+
+    sorted_list.sort(reverse=True)
+
+    for i in sorted_list:
+        print(i)
+     
+    #sys.stdout.write(output_buffer)
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,71 @@
+#!/usr/bin/python3
+
+# what libraries does this program need?
+import sys, errno, getopt
+
+# how do we print the usage instructions (and exit)?
+def usage():
+    print('usage: radf -b "begin marker" -e "end marker" -s "selector"')
+    sys.exit(errno.EINVAL)
+
+# what is the main execution flow?
+def main():
+
+    # can we successfully get valid program options?
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "b:e:s:")
+    except getopt.GetoptError as err:
+        print(err)
+        sys.exit(errno.EINVAL)
+
+    # how do i know if they didn't type enough options?
+    if len(sys.argv) < 7:
+        usage()
+
+    # where do i store the option values?
+    begin_marker = ""
+    end_marker = ""
+    selector = ""
+    
+    # how do i pull out the options?
+    for o, a in opts:
+        if o == "-b":
+            begin_marker = a
+        elif o == "-e":
+            end_marker = a
+        elif o == "-s":
+            selector = a
+        else:
+            assert False
+
+    # how do i validate the options?
+    # `raddel -t TOPIC_NUMBEr [-a AUTH_FILE]`
+    if begin_marker == "":
+        print("radf: no begin marker specified")
+        usage()
+
+    if end_marker == "":
+        print("radf: no end marker specified")
+        usage()
+
+    if selector == "":
+        print("radf: no selectors specified")
+        usage()
+
+    output_buffer = ""
+    for line in sys.stdin:
+        if begin_marker in line and selector in line:
+            pass
+        elif begin_marker in line and selector not in line:
+            while end_marker not in line:
+                line = next(sys.stdin)
+        elif end_marker in line:
+            pass
+        else:
+            output_buffer += line
+        
+    sys.stdout.write(output_buffer)
+
+
+if __name__ == '__main__':
+    main()

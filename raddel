@@ -1,0 +1,60 @@
+#!/usr/bin/python3
+
+# what libraries does this program need?
+import getopt, sys, errno, maas_discourse, json
+import os.path
+from os import path
+from pathlib import Path
+
+# how do we print the usage instructions (and exit)?
+def usage():
+    print("usage: raddel -t TOPIC_NUMBER [-a AUTH_FILE]")
+    sys.exit(errno.EINVAL)
+
+# what is the main execution flow?
+def main():
+
+    # can we successfully get valid program options?
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "t:a:")
+    except getopt.GetoptError as err:
+        print(err)
+        sys.exit(errno.EINVAL)
+
+    # how do i know if they didn't type enough options?
+    if len(sys.argv) < 3:
+        usage()
+
+    # where do i store the option values?
+    topic_number = 0
+    home = str(Path.home())
+    auth_file = home+"/.config/rad/dc.yaml"
+
+    # how do i pull out the options?
+    for o, a in opts:
+        if o == "-t":
+            topic_number = a
+        elif o == "-a":
+            auth_file = a
+        else:
+            assert False
+
+    # how do i validate the options?
+    # `raddel -t TOPIC_NUMBEr [-a AUTH_FILE]`
+    if topic_number == 0:
+        print("raddel: no topic number specified")
+        usage()
+
+    if not path.exists(auth_file):
+        print("radget: no such file or directory:", auth_file)
+        usage()
+
+    # make sure we can get the credentials; if not, error output
+    credentials = maas_discourse.md_get_credentials(auth_file)
+
+    # delete the topic
+    maas_discourse.md_api_delete_topic(topic_number, credentials)
+
+
+if __name__ == '__main__':
+    main()

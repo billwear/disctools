@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 
-import sys, json, subprocess, os
+import sys, json, subprocess, os, errno
 from yaml import load, dump
+from pathlib import Path
 
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
@@ -30,13 +31,15 @@ def get_topic(config_data, topic):
         
         # read the result into a usable buffer
         output = proc.stdout.read()
-        
+
         # convert the result to json
         try:
             topic_json = json.loads(output)
+
         except:
             print("topic " + str(topic) + " doesn't exist; exiting")
-            sys.exit(4)
+            return "ENOEXIST"
+
         try:
             if topic_json["error_type"] == "rate_limit":
                 wait_time = topic_json["extras"]["wait_seconds"]
@@ -46,7 +49,7 @@ def get_topic(config_data, topic):
         except:
             return topic_json
 
-def get_post(config_data, post_id):
+def get_latest_revision_of_post(config_data, post_id):
     rate_limit_error = True
     while rate_limit_error == True:
         proc = subprocess.Popen(
@@ -61,7 +64,7 @@ def get_post(config_data, post_id):
                 "Api-Username: " + config_data["api_username"],
                 "-H",
                 "Content-Type: application/json",
-                config_data["base_url"] + "/posts/{" + str(post_id) + "}.json",
+                config_data["base_url"] + "/posts/{" + str(post_id) + "}/revisions/latest.json",
             ],
             stdout=subprocess.PIPE,
         )
@@ -74,7 +77,7 @@ def get_post(config_data, post_id):
             post_json = json.loads(output)
         except:
             print("topic " + str(topic) + " doesn't exist; exiting")
-            sys.exit(4)
+            return("errno.ENOEXIST")
         try:
             if post_json["error_type"] == "rate_limit":
                 wait_time = post_json["extras"]["wait_seconds"]
@@ -84,50 +87,64 @@ def get_post(config_data, post_id):
         except:
             return post_json
 
-def print_usage():
-    print("usage: dpull -n topic_number")
+        
+def usage():
+    print("usage: radlastmod -t topic_number")
+    sys.exit(errno.EINVAL)
 
 if len(sys.argv) != 3:
-    print_usage()
-    sys.exit()
-
-if sys.argv[1] != "-n":
-    print_usage()
-    sys.exit()
-    
-topic_number = sys.argv[2]
+    usage()
+elif sys.argv[1] != "-t":
+    usage()
+else:
+    topic_number = sys.argv[2]
 
 # read config file to get api-key, api-usr, and discourse url
+home = str(Path.home())
 try:
-    cfile = open("/home/stormrider/.config/rad/dc.yaml", "r")
+    cfile = open(home+"/.config/rad/dc.yaml", "r")
 except:
-    print("dpull: cannot open configuration file")
-    print("dpull: exiting")
+    print('rlet: cannot open', path_to_config)
+    print("rlet: exiting")
     sys.exit(4)
 config_data = load(cfile, Loader=Loader)
 cfile.close()
 
-# get the JSON data from the API, with rate limit management
+# pull topic to get its last modification time
 topic_json = get_topic(config_data, topic_number)
 
-# extract the post ID from the topic json 
+# handle a "does not exist" error
+if topic_json == "ENOEXIST":
+    sys.stdout.write("0,0")
+    exit(errno.ENODATA)
+
+# pull the main [0] post id
 try:
     post_id = topic_json["post_stream"]["posts"][0]["id"]
 except:
     print(topic_json)
-    print('xpub: error trying to read post_id, point 3')
-    print("error type should be:",topic_json["error_type"])
-    print("xpub: exiting")
-    sys.exit(551)
+    sys.exit(errno.EINVAL)
 
-# read the post using the api, handling rate_limit events
-post_json = get_post(config_data, post_id)
-        
-# extract the article markdown from the json output
-raw = post_json["raw"]
+## pull the latest revision of the main post
+post_json = get_latest_revision_of_post(config_data, post_id)
 
-# write the article markdown to stdout
-sys.stdout.write(raw)
+# handle a "does not exist" error
+if post_json == "ENOEXIST":
+    sys.stdout.write("0,0")
+    exit(errno.ENODATA)
 
+## pull the correct timestamp from the latest revision
+try:
+    created_at = post_json["created_at"]
+    username = post_json["username"]
+except:
+    sys.stdout.write("0,0")
+    sys.exit(errno.ENODATA)
 
+proc = subprocess.Popen(['date','--date='+str(created_at), "+%s"], stdout=subprocess.PIPE)
+epoch = proc.stdout.read().decode("utf-8").split("\n")[0]
 
+sys.stdout.write(epoch + " ==> " + str(topic_number))
+sys.stdout.write('\n')
+
+     

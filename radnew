@@ -1,0 +1,76 @@
+#!/usr/bin/python3
+
+# what libraries does this program need?
+import getopt, sys, errno, maas_discourse, json
+import os.path
+from os import path
+from pathlib import Path
+
+# how do we print the usage instructions (and exit)?
+def usage():
+    print("usage: radnew -T 'TITLE STRING' -c category [-a AUTH_FILE]")
+    sys.exit(errno.EINVAL)
+
+# what is the main execution flow?
+def main():
+
+    # can we successfully get valid program options?
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "T:a:c:")
+    except getopt.GetoptError as err:
+        print(err)
+        sys.exit(errno.EINVAL)
+
+    # how do i know if they didn't type enough options?
+    if len(sys.argv) < 5:
+        usage()
+
+    # where do i store the option values?
+    title = ""
+    category = 0
+    home = str(Path.home())
+    auth_file = home + "/.config/rad/dc.yaml"
+
+    # how do i pull out the options?
+    for o, a in opts:
+        if o == "-T":
+            title = a
+        elif o == "-a":
+            auth_file = a
+        elif o == "-c":
+            category = a
+        else:
+            assert False
+
+    # how do i validate the options?
+    # `radnew -T "TITLE STRING" [-a AUTH_FILE]`
+    if title == "":
+        print("radnew: no title entered")
+        usage()
+
+    if category == 0:
+        print("radnew: no category entered")
+        usage()
+
+    if not path.exists(auth_file):
+        print("radget: no such file or directory:", auth_file)
+        usage()
+
+    # make sure we can get the credentials; if not, error output
+    credentials = maas_discourse.md_get_credentials(auth_file)
+
+    # get the markdown from stdin
+    markdown = sys.stdin.read()
+
+    # write the post
+    topic_id = maas_discourse.md_api_new_topic(title, markdown, category, credentials)
+
+    topic_id_return = str(topic_id) + "\n"
+    output = title + " " + topic_id_return
+    
+    # return results to called
+    sys.stdout.write(output)
+        
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,7 @@
+#! /bin/bash
+
+sqlite3 ~/.config/rad/rad.db 'select * from links where url like "%/'$1'"' | cut -f3 -d'|' | xargs -I % sh -c 'radlastmod -t %' > /tmp/checkfile
+date +%s -r "$1.md" | tr -d "\n" >> /tmp/checkfile
+echo " ==> $1.md" >> /tmp/checkfile
+cat /tmp/checkfile | sort
+

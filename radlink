@@ -1,10 +1,8 @@
 #!/usr/bin/python3
 
-## rlink 1.0, stamped 11:52 22 Jun 2021
-## coded by bill.wear@canonical.com
-
 import os, sys, sqlite3, errno
 from sqlite3 import Error
+from pathlib import Path
 
 # function to create sqlite database connection
 def create_connection(db_file):
@@ -29,25 +27,36 @@ def find_all(a_str, sub):
 # function to find the topic number for a url/selector combo in the rad database
 def get_topic_number(conn, selector, url):
 
-        # create the matching url
-        db_url = "/docs" + selector + "/" + url
+#    print("url = ", url)
+    # create the matching url
+    db_url = "/docs" + selector + "/" + url
 
-        # attempt to find the matching record in the RAD database
-        cur = conn.cursor()
-        cur.execute("SELECT topic_number from links WHERE url='" + db_url + "'")
-        topic_number = cur.fetchall()
+    # attempt to find the matching record in the RAD database
+    cur = conn.cursor()
+    flob = cur.execute("SELECT topic_number from links WHERE url='" + db_url + "'")
+    topic_number = cur.fetchall()
 
-        # clean up the topic number on the way out
-        return int(str(topic_number).split('(')[1].split(',')[0])
+    # try to clean up the topic number; error out if can't
+    try:
+        topic_number_return = str(topic_number).split('(')[1].split(',')[0]
+    except:
+        print("url = ", url)
+        print("selector = ", selector)
+        sys.exit(1)
+        
+    return int(topic_number_return)
 
 # usage message
-def print_usage():
-        print("usage: rlink -s selector")
-        
+def usage():
+    print("usage: radlink -s selector")
+    sys.exit(errno.EINVAL)
+
+# identify the user's home directory
+home = str(Path.home())
+
 # rudimentary command line handling
 if len(sys.argv) != 3 or sys.argv[1] != "-s":
-        print_usage()
-        sys.exit(errno.EINVAL)
+        usage()
 
 # peel the selector out of the argument list
 selector = sys.argv[2]
@@ -58,11 +67,11 @@ dbfile = None
 # find the db file
 if os.path.isfile("./rad.db") == True:
     dbfile = "./rad.db"
-elif os.path.isfile("/etc/rad/rad.db") == True:
-    dbfile = "/etc/rad/rad.db"
+elif os.path.isfile(home+"/.config/rad/rad.db") == True:
+    dbfile = home+"/.config/rad/rad.db"
 else:
     print("Error when trying to access RAD database:", os.strerror(errno.ENOENT))
-    print("rad: exiting")
+    print("radlink: exiting")
     sys.exit(errno.ENOENT)
 
 # make a connection to the rad.db database
@@ -73,10 +82,10 @@ conn = create_connection(dbfile)
 document_markdown = sys.stdin.read()
 
 # find every instance of “/t/”
-links = list(find_all(document_markdown, '/t/'))
+vlinks = list(find_all(document_markdown, '/t/'))
 
 # loop through the list and find all that contain "nnnn"
-for i in links:
+for i in vlinks:
 
         # split on closing parend
         full_link = document_markdown[i:].split(")")[0]
@@ -86,27 +95,27 @@ for i in links:
 
         # is the topic_part an "nnnn"?
         if topic_part == "nnnn":
+            
+            # find the edges of the link
+            where = document_markdown.find("nnnn", i) + 4
+            if where == -1:
+                continue
 
-                # find the edges of the link
-                where = document_markdown.find("nnnn", i) + 4
-                if where == -1:
-                        continue
+            # pull out the base url 
+            base_url = document_markdown[i:where].split("/")[-2]
 
-                # pull out the base url 
-                base_url = document_markdown[i:where].split("/")[-2]
+            # find the topic number
+            topic_number = get_topic_number(conn, selector, base_url)
+            
+            # form up the replacement link
+            repl_link = "/t/" + base_url + "/" + str(topic_number)
 
-                # find the topic number
-                topic_number = get_topic_number(conn, selector, base_url)
-
-                # form up the replacement link
-                repl_link = "/t/" + base_url + "/" + str(topic_number)
-
-                # form up the original link
-                orig_link = document_markdown[i:where]
-
-                # make the replacements in the document markdown
-                # (we don't care if it replaces them more than once, just saves us some time)
-                document_markdown = document_markdown.replace(orig_link,repl_link)
+            # form up the original link
+            orig_link = document_markdown[i:where]
+            
+            # make the replacements in the document markdown
+            # (we don't care if it replaces them more than once, just saves us some time)
+            document_markdown = document_markdown.replace(orig_link,repl_link)
 
 # output the fixed RAD document to stdout
 sys.stdout.write(document_markdown)

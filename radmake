@@ -1,0 +1,14 @@
+#!/bin/sh -x
+
+sqlite3 ~/.config/rad/rad.db 'select * from links' \
+    | grep "/${1%%.*}|" \
+    | grep -v "2\.7" \
+    | grep -v "2\.8" \
+    | cut -f2,3 -d"|" \
+    | cut -f3- -d"/" \
+    | sed -e 's/|/ /g' \
+    | sed -e 's/^/\//' \
+    | sed -e 's/i\//i /' \
+    | awk '{print  "cat " $2 ".md | radfilter -b rad-begin -e rad-end -s " $1 " | radlink -s " $1 " | radmenu -b " $2 " | radput -t " $3}' > /tmp/Rmake.sh
+chmod 777 /tmp/Rmake.sh
+/tmp/Rmake.sh

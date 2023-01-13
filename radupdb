@@ -1,0 +1,160 @@
+#!/usr/bin/python3
+
+## radupdb version 1.0, stamped 11:45 23 June 2021
+## coded by bill.wear@canonical.com
+
+import sqlite3, sys, os, errno, getopt, subprocess, shutil
+from sqlite3 import Error
+from pathlib import Path
+
+## usage message
+def usage():
+    print("usage: radupdb -n INDEX_TOPIC_NUMBER [-d DB_FILE_NAME] [-a AUTH_FILE_NAME]")
+    sys.exit(errno.EINVAL)
+    
+## create the database connection
+def create_connection(db_file):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+        return conn
+    except Error as e:
+        print(e)
+
+    return conn
+
+## create the database table (used if it doesn't exist) 
+def create_table(conn, create_table_sql):
+    try:
+        c = conn.cursor()
+        c.execute(create_table_sql)
+    except Error as e:
+        print(e)
+
+## read the maas index page and pull out the URL table;
+## that forms our authoritative source, as it is the final arbiter of links
+def read_index_topic(auth_file, index_topic_number, url, topic_number):
+    
+    # first, let's not reinvent the wheel; 
+    # let's just use dpull, which we already have
+    stream = os.popen('radget -t ' + str(index_topic_number) + ' -a ' + auth_file)
+    dictionary = stream.read()
+
+    # find the URL mapping table
+    dictionary = dictionary[dictionary.find('## URLs'):dictionary.find('## Redirects')]
+    
+    # break it up into two lists for the database: url and topic number
+    dictionary_lines = dictionary.split('\n')
+
+    for i in dictionary_lines:
+        if "https" in i:
+            topic_number.append(i.split('|')[1].split('/')[-1])
+            url.append(i.split('|')[2])
+
+## create a link in the table from the passed info
+def create_link(conn, link):
+
+    sql = ''' INSERT INTO links(url, topic_number) VALUES(?,?) '''
+    cur = conn.cursor()
+    cur.execute(sql, link)
+    conn.commit()
+
+    return cur.lastrowid
+
+def main():
+
+    ## process the command line
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "a:n:d:")
+    except getopt.GetoptError as err:
+        print(err)
+        usage()
+
+    if len(sys.argv) < 3:
+        usage()
+
+    home = str(Path.home())
+
+    ## set option values to recognizable blanks
+    db_file = home + "/.config/rad/rad.db"
+    auth_file = home + "/.config/rad/dc.yaml"
+    index_topic_number = 0
+    
+    ## loop through the passed options
+    for o, a in opts:
+        if o == "-d":
+            db_file = a
+        elif o == "-a":
+            auth_file = a
+        elif o == "-n":
+            index_topic_number = a
+        else:
+            assert False
+
+    ## validate the options
+    if db_file == None:
+        print("radupdb: no database file specified")
+        usage()
+        
+    if auth_file == None:
+        print("radupdb: no API auth file specified")
+        usage()
+
+    if index_topic_number == 0:
+        print("radupdb: no MAAS docs index topic number specified")
+        usage()
+    
+    ## set up a couple of lists
+    url = []
+    topic_number = []
+
+    ## load the create table command
+    sql_create_links_table = """CREATE TABLE IF NOT EXISTS links (
+    id integer PRIMARY KEY,
+    url text,
+    topic_number integer
+    ); """
+
+    # move the existing rad.db database to backup
+    # to avoid duplicate records
+    try:
+        shutil.move(home+'/.config/rad/rad.db', home+'/.config/rad/rad.db~')
+    except:
+        pass
+        
+    ## create a connection to the database
+    ## note that, since the master is in /etc/rad (sudo access required),
+    ## new databases are recommended to be loaded in the local directory;
+    ## it is then the user's responsibility to sudo cp it to /etc/rad
+    conn = create_connection(db_file)
+
+    ## this is where we create things if we need to;
+    ## this looks slightly broken, may have to fix this later
+    if conn is not None:
+        create_table(conn, sql_create_links_table)
+    else:
+        print("radupdb: could not create database connection")
+
+    ## read and parse the index file URL table into internal lists
+    read_index_topic(auth_file,index_topic_number,url,topic_number)
+
+    entries = len(url)
+    cleared = 0
+    rotor = 0
+
+    ## really simple loop that builds the db from the parsed index file URL table
+    for u, t in zip(url, topic_number):
+        if "2.7" in u or "2.8" in u:
+            entries =- 1
+            continue
+        # retval = subprocess.getoutput("./radlastmod -t " + t)
+        # values = retval.split(",")
+        # ts = values[0]
+        # le = values[1]
+        # link = (u, t, ts, ts, le)
+        link = (u, t)
+        create_link(conn, link)
+        print(".")
+
+if __name__ == '__main__':
+    main()

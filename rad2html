@@ -1,0 +1,203 @@
+#!/usr/bin/python3
+
+# what libraries does this program need?
+import errno, sys, subprocess, json, os, time, re, markdown, jinja2
+import getopt
+from shutil import copyfile
+import shutil
+import requests
+from yaml import load, dump
+
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
+
+# how do we print the usage instuctions (and exit)?
+def usage():
+    print("usage: rad2html -t HTML_TITLE -f HTML_BASENAME -T HTML_TEMPLATE_FILE [-i INPUT_MARKDOWN_FILE] [-o OUTPUT_HTML_FILE] [-n (do not process images)]")
+    sys.exit(errno.EINVAL)
+    
+# what is the main execution flow?
+
+def main():
+
+    # can we successfully get valid program options?
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "i:o:t:f:T:n")
+    except getopt.GetoptError as err:
+        print(err)
+        sys.exit(errno.EINVAL)
+
+    # where do i store the option values?
+    input_file = ""
+    output_file = ""
+    page_title = ""
+    html_basename = ""
+    html_template = ""
+    no_images = False
+
+    # how do i pull out the options?
+    for o, a in opts:
+        if o == "-i":
+            input_file = a
+        elif o == "-o":
+            output_file = a
+        elif o == "-t":
+            page_title = a
+        elif o == "-f":
+            html_basename = a
+        elif o == "-T":
+            html_template = a
+        elif o == "-n":
+            no_images = True
+        else:
+            assert False
+
+    # did we get an html title?
+    if page_title == "":
+        print("rad2html: no HTML title specified")
+        usage()
+        
+    # did we get a document basename?
+    if html_basename == "":
+        print("rad2html: no HTML basename specified")
+        usage()
+
+    # did we get an HTML template file path?
+    if html_template == "":
+        print("rad2html: no HTML template file path specified")
+        usage()
+
+    # where do i get my input text?
+    if input_file == "":
+        md = sys.stdin.read()
+    else:
+        mdfile = open(input_file, "r")
+        md = mdfile.read()
+        mdfile.close()
+
+    # replace the external link image used in markdown with the HTML hex
+    # code for the link symbol, throughout the text
+    try:
+        md = md.replace(" ![external-link-icon|15x15](upload://AsoQHBzEFT6NuSK3ZYyhp7S6BMi.png)", "&#128279;")
+    except:
+        pass
+
+    # retrieve the images in the file and store them in "./images",
+    # correcting sizing and resolution negligence atw
+
+    ## create the images subdir if it's not there
+    if not os.path.isdir("/tmp/images"):
+        os.mkdir("/tmp/images")
+
+    ## make a list of html image links in the input file
+    match2 = re.findall(r'<a href="[^>]*><img src="[^ ]*">', md)
+
+    ## make one list of image references
+    imagelines = match2
+
+    ## capture image file names and properties
+    for x in imagelines:
+        #        print(x)
+        img_url = str(re.findall(r'<img src="([^ ]*)">',x)).split("'")[1]
+        img_fnam = "/tmp/images/" + str(img_url).split("/")[-1].split(")")[0].split("'")[0]
+        img_link = "images/" + x.split("/")[-1].split(")")[0].split('"')[0]
+
+        if no_images == False:
+            ## download the images and store them locally
+            r = requests.get(img_url, stream=True)
+            r.raw.decode_content = True
+            with open(img_fnam, "wb") as f:
+                shutil.copyfileobj(r.raw, f)
+
+        img_props = str(subprocess.check_output(["file", img_fnam]))
+        img_awidth = (
+            re.search(",[ ]*[0-9]*[]*x[ ]*[0-9]*[ ]*,", img_props)
+            .group()
+            .split(",")[1]
+            .split("x")[0]
+        )
+        img_aheight = (
+            re.search(",[ ]*[0-9]*[]*x[ ]*[0-9]*[ ]*,", img_props)
+            .group()
+            .split(",")[1]
+            .split("x")[1]
+        )
+        
+        ## correct image dim to standard width
+        corr_width = 690
+        corr_height = int(float(img_awidth) / 690.0 * float(img_aheight))
+        
+        ## re-do the image line with correct / actual dims
+        ## (aspect ratio turned off for now, it's buggy)
+        repl_img_line = '<a href="' + img_link
+        repl_img_line += '" target = "_blank"><img alt="'
+        repl_img_line += "unlabeled image" + '" '
+        repl_img_line += 'width="690" '
+        #                repl_img_line += 'height="' + str(corr_height) + '" '
+        repl_img_line += 'src="' + img_link + '">'
+        #        print(repl_img_line)
+        #        sys.exit(0)
+        
+        ## replace the image line in the markdown
+        md = md.replace(x, repl_img_line)
+        #        md = md.replace(img_url, img_link)
+        
+    # correct majority of the links
+    try:
+        md = re.sub(r"https://discourse.maas.io/t", "/t", md)
+        md = re.sub(r"/t/([a-z0-9-]*)/([0-9]*)#", r"\1-\2.html#", md)
+        md = re.sub(r"/t/([a-z0-9-]*)/([0-9]*)", r"\1-\2.html", md)
+    except:
+        pass
+
+    # tag out some unrecognized html during the conversion
+    md = (
+        md.replace("<details>", "zorkD")
+        .replace("<summary>", "zorkS")
+        .replace("</details>", "zorkDC")
+        .replace("</summary>", "zorkSC")
+    )
+
+    # convert the corrected markdown to html
+    extensions = {"extra", "smarty"}
+    html = markdown.markdown(md, extensions=extensions, output_format="html5")
+    html = "<h1>" + page_title + "</h1>" + html
+
+    # tag back in the unrecognized html during the conversion
+    html = (
+        html.replace("zorkDC", "</details>")
+        .replace("zorkSC", "</summary>")
+        .replace("zorkD", "<details>")
+        .replace("zorkS", "<summary>")
+    )
+
+   try:
+        template_file = open(html_template, "r")
+        TEMPLATE = template_file.read()
+    except:
+        TEMPLATE = """<!DOCTYPE html>
+        <html>
+        <body>
+        <div class="container">
+        {{content}}
+        </div>
+        </body>
+        </html>
+        """
+
+    doc = jinja2.Template(TEMPLATE).render(content=html)
+
+    doc = doc.replace("zork", html_basename+".html")
+    
+    if output_file == "":
+        sys.stdout.write(doc)
+    else:
+        htmlf = open(output_file, "w")
+        htmlf.write(doc)
+        htmlf.close()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,150 @@
+#!/usr/bin/python3
+
+import os, sys, sqlite3, errno, getopt, shutil
+from sqlite3 import Error
+from pathlib import Path
+
+# create a connection to the database file
+def create_connection(db_file):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+        return conn
+    except Error as e:
+        print(e)
+
+    return conn
+
+# pull out a selector from a URL string
+def makesel(string):
+        selector = string.rsplit("/",1)[0]
+        return selector
+
+# find all substrings, matching a_str in sub
+def find_all(a_str, sub):
+        start = 0
+        while True:
+                start = a_str.find(sub, start)
+                if start == -1: return
+                yield start
+                start += len(sub) # use start += 1 to find overlapping matches
+
+# find a topic nubmer for a given url/selector combination
+def get_topic_number(conn, selector, url):
+
+        # create the matching url
+        db_url = "/docs" + selector + "/" + url
+
+        # attempt to find the matching record in the RAD database
+        cur = conn.cursor()
+        cur.execute("SELECT topic_number from links WHERE url=?", (db_url,))
+        topic_number = cur.fetchall()
+
+        # clean up the topic number on the way out
+        return str(topic_number).split('(')[1].split(',')[0]
+
+# find URLs matching a base_url (title-slug) in the RAD database
+def find_matching_urls(base_url, conn):
+
+        # attempt to find the matching records in the RAD database
+        cur = conn.cursor()
+        cur.execute("SELECT url from links where url like '%/" + base_url + "'")
+        matching_rows = cur.fetchall()
+
+        # return the results
+        return matching_rows
+
+# print program usage message
+def usage():
+        print("usage: rmenu -b base_url")
+        sys.exit(errno.EINVAL)
+
+def main():
+
+    # can we successfully get valid program options?
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "b:")
+    except getopt.GetoptError as err:
+        print(err)
+        sys.exit(errno.EINVAL)
+
+    # how do i know if they didn't type enough options?
+    if len(sys.argv) < 3:
+        usage()
+
+    # where do i store the option values?
+    base_url = ""
+
+    # how do i pull out the options?
+    for o, a in opts:
+        if o == "-b":
+            base_url = a
+        else:
+            assert False
+
+    # how do i validate the options?
+    if base_url == "":
+        print("radmenu: no base_url specified")
+        usage()
+
+    # pull in the document markdown from stdin;
+    # gulping it because links sometimes span lines
+    document_markdown = sys.stdin.read()
+
+    # find the user's home directory
+    home = str(Path.home())
+
+    # make a connection to the rad.db database
+    conn = create_connection(home+r"/.config/rad/rad.db")
+    
+    # retrieve all db records where URL contains base_url
+    matched_lines = find_matching_urls(base_url, conn)
+
+    # build a list of the actual URLs
+    rad_urls = []
+    for i in matched_lines:
+        rad_urls.append((str(i).split("'")[1])[len("/docs"):])
+
+    # sort the matching url list
+    rad_urls.sort()
+
+    # two versions, cli and ui for each
+    # prepare the menu, cell by cell
+    table = "||" + rad_urls[0].split("/")[2]
+    table += "|" + rad_urls[2].split("/")[2]
+    table += "|" + rad_urls[4].split("/")[2] + "|\n"
+    table += "|-----:|:-----:|:-----:|:-----:|\n"
+    table += "|" + rad_urls[0].split("/")[1].upper() 
+    table += "| [" + rad_urls[0].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[0]),base_url) 
+    table += ") ~ [" + rad_urls[1].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[1]),base_url) + ")"
+    table += "| [" + rad_urls[2].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[2]),base_url) 
+    table += ") ~ [" + rad_urls[3].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[3]),base_url) + ")"
+    table += "| [" + rad_urls[4].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[4]),base_url) 
+    table += ") ~ [" + rad_urls[5].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[5]),base_url) + ")|\n"
+    table += "|" + rad_urls[6].split("/")[1].upper() 
+    table += "| [" + rad_urls[6].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[6]),base_url) 
+    table += ") ~ [" + rad_urls[7].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[7]),base_url) + ")"
+    table += "| [" + rad_urls[8].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[8]),base_url) 
+    table += ") ~ [" + rad_urls[9].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[9]),base_url) + ")" 
+    table += "| [" + rad_urls[10].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[10]),base_url) 
+    table += ") ~ [" + rad_urls[11].split("/")[3].upper() + "](/t/-/"
+    table += get_topic_number(conn,makesel(rad_urls[11]),base_url) + ")|\n" 
+
+    # output the augmented RAD document to stdout
+    sys.stdout.write(table + "\n" + document_markdown)
+
+if __name__ == '__main__':
+    main()
+
+

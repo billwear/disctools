@@ -1,0 +1,54 @@
+#!/bin/sh -x
+
+mkdir -p ~/.local/publication-staging/snap/2.9/ui
+mkdir -p ~/.local/publication-staging/snap/2.9/cli
+mkdir -p ~/.local/publication-staging/snap/2.9/ui/html
+mkdir -p ~/.local/publication-staging/snap/2.9/cli/html
+mkdir -p ~/.local/publication-staging/snap/3.0/ui
+mkdir -p ~/.local/publication-staging/snap/3.0/cli
+mkdir -p ~/.local/publication-staging/snap/3.0/ui/html
+mkdir -p ~/.local/publication-staging/snap/3.0/cli/html
+mkdir -p ~/.local/publication-staging/snap/3.1/ui
+mkdir -p ~/.local/publication-staging/snap/3.1/cli
+mkdir -p ~/.local/publication-staging/snap/3.1/ui/html
+mkdir -p ~/.local/publication-staging/snap/3.1/cli/html
+mkdir -p ~/.local/publication-staging/deb/2.9/ui
+mkdir -p ~/.local/publication-staging/deb/2.9/cli
+mkdir -p ~/.local/publication-staging/deb/2.9/ui/html
+mkdir -p ~/.local/publication-staging/deb/2.9/cli/html
+mkdir -p ~/.local/publication-staging/deb/3.0/ui
+mkdir -p ~/.local/publication-staging/deb/3.0/cli
+mkdir -p ~/.local/publication-staging/deb/3.0/ui/html
+mkdir -p ~/.local/publication-staging/deb/3.0/cli/html
+mkdir -p ~/.local/publication-staging/deb/3.1/ui
+mkdir -p ~/.local/publication-staging/deb/3.1/cli
+mkdir -p ~/.local/publication-staging/deb/3.1/ui/html
+mkdir -p ~/.local/publication-staging/deb/3.1/cli/html
+
+#TITLE = $3
+
+sqlite3 ~/.config/rad/rad.db 'select * from links' \
+    | grep "/${1%%.*}|" \
+    | grep -v "2\.7" \
+    | grep -v "2\.8" \
+    | cut -f2,3 -d"|" \
+    | cut -f3- -d"/" \
+    | sed -e 's/|/ /g' \
+    | sed -e 's/^/\//' \
+    | sed -e 's/i\//i /' \
+   | awk '{print  "cat " $2 ".md | radfilter -b rad-begin -e rad-end -s " $1 " | radlink -s " $1 " | radmenu -b " $2 " > ~/.local/publication-staging" $1 "/" $2 ".md"}' > ~/.local/Rmake.sh
+sqlite3 ~/.config/rad/rad.db 'select * from links' \
+    | grep "/${1%%.*}|" \
+    | grep -v "2\.7" \
+    | grep -v "2\.8" \
+    | cut -f2,3 -d"|" \
+    | cut -f3- -d"/" \
+    | sed -e 's/|/ /g' \
+    | sed -e 's/^/\//' \
+    | sed -e 's/i\//i /' \
+    | awk '{print  "cat " $2 ".md | radfilter -b rad-begin -e rad-end -s " $1 " | radlink -s " $1 " | rad2html -t " $TITLE " -f " $2 " > ~/.local/publication-staging" $1 "/html/" $2 ".html"}' >> ~/.local/Rmake.sh
+chmod 777 ~/.local/Rmake.sh
+~/.local/Rmake.sh
+# rm ~/.local/Rmake.sh
+#| sed -e \"s/\\[\\/*note[A-Za-z\\" ]*\\]//g\" 
+#\"s/href=\\\"\\/t\\/\\(\\[a-zA-Z0-9-\\]*\\)\\/\\[0-9\\]*/href=\\\"https:\\/\\/$1.html/g\"

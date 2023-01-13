@@ -1,0 +1,22 @@
+#!/bin/sh -x
+
+echo "#!/bin/sh -x" > /tmp/Rmake.sh
+echo $1, $2, $3
+sqlite3 ~/.config/rad/rad.db 'select * from links' \
+    | grep "/${1%%.*}|" \
+    | grep -v "2\.7" \
+    | grep -v "2\.8" \
+    | grep -v "2\.9" \
+    | grep -v "3\.0" \
+    | cut -f2,3 -d"|" \
+    | cut -f3- -d"/" \
+    | sed -e 's/|/ /g' \
+    | sed -e 's/^/\//' \
+    | sed -e 's/i\//i /' \
+    | awk -v title="\"$2\"" -v root="$3" -v gitdir="$4" '{split($1,a,"/");print "cat " gitdir "/src/" $2 ".md | radfilter -b rad-begin -e rad-end -s " $1 " | radlink -s " $1 " | rad2html -T " gitdir "/html-support/templates" $1 "/template.html -t " title " -f " $2 " > " root "/production-html-" a[2] "/" a[4] "/" $2 ".html"}'  >> /tmp/Rmake.sh
+chmod 777 /tmp/Rmake.sh
+/tmp/Rmake.sh
+# cp ~/.local/publication-staging/snap/3.1/ui/html/maas-documentation-25.html production-html-snap
+# cp ~/.local/publication-staging/deb/3.1/ui/html/maas-documentation-25.html production-html-deb
+# cp ~/.local/publication-staging/snap/3.1/ui/html/maas-documentation-25.html production-html-snap/maas-documentation.html
+# cp ~/.local/publication-staging/deb/3.1/ui/html/maas-documentation=25.html production-html-deb/maas-documentation.html
