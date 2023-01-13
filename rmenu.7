@@ -1,0 +1,42 @@
+.\"Modified from man(1) of FreeBSD, the NetBSD mdoc.template, and mdoc.samples.
+.\"See Also:
+.\"man mdoc.samples for a complete listing of options
+.\"man mdoc for the short list of editing options
+.\"/usr/share/misc/mdoc.template
+.Dd 8/4/10               \" DATE
+.Dt rmenu 7      \" Program name and manual section number
+.Os Ubuntu
+.Sh NAME                 \" Section Header - required - don't modify
+.Nm rmenu
+.\" The following lines are read in generating the apropos(man -k) database. Use only key
+.\" words here as the database is built based on the words here and in the .ND line.
+.\" Use .Nm macro to designate other names for the documented program.
+.Nd add a RAD file menu to the beginning of text received on stdin.
+.Sh SYNOPSIS             \" Section Header - required - don't modify
+.Nm
+.\".Op Fl abcd              \" [-abcd]
+.Op Fl b Ar base_url         \" [-a path]
+.Op Fl d Ar /path/to/dictionary         \" [-a path]
+.\".Op Ar file              \" [file]
+.\".Op Ar                   \" [file ...]
+.\".Ar arg0                 \" Underlined argument - use .Ar anywhere to underline
+.\"arg2 ...                 \" Arguments
+.Sh DESCRIPTION          \" Section Header - required - don't modify
+.Nm
+adds a RAD menu to the top of the "page" of input text.
+.\".Ar underlined text .
+.Pp                      \" Inserts a space
+RAD (Reader Adaptive Documentation) documents represent a number of different combinations of selectors, e.g., version, interface (UI/CLI), packaging method (snap/deb), etc. Each of these combinations is represented by a different document.  For each major document title (e.g., "Network management"), there is a different page with the same title for each combination.  The menu allows the reader to choose which combination they would like to see for a given page.
+.Pp
+.Nm
+uses the URL list in the main index document to find the correct topic number.  The
+.Ar base_url
+argument is matched against the last subdirectory in the doc URL to retrieve the topic number.
+.Pp
+.Nm
+outputs the augmented RAD text to stdout.
+.Sh FILES          \" Section Header - required - don't modify
+.Ar https://discourse.maas.io/t/maas-documentation/25
+is the main index file.  It is a special discourse documentation file (one per docset) which contains all of the navigation, a URL mapping table that maps discourse topic addresses to visible URLs, and a redirect table that routes obsolete URLs to current URLs.  The URL mapping table contained in this file is sufficient to act as a companion dictionary for other rad tools that need to look up topic numbers.
+.\" .Sh BUGS              \" Document known, unremedied bugs
+.\" .Sh HISTORY           \" Document history if command behaves in a unique manner

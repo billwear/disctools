@@ -1,0 +1,172 @@
+#!/usr/bin/python3
+
+## rdbload version 1.0, stamped 11:45 23 June 2021
+## coded by bill.wear@canonical.com
+
+import sqlite3, sys, os, errno, getopt, subprocess
+from sqlite3 import Error
+
+## usage message
+def print_usage():
+    print("usage: rdbload -d db_file_name -a auth_file_name -n maas_index_topic_number")
+    
+## create the database connection
+def create_connection(db_file):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+        return conn
+    except Error as e:
+        print(e)
+
+    return conn
+
+## create the database table (used if it doesn't exist) 
+def create_table(conn, create_table_sql):
+    try:
+        c = conn.cursor()
+        c.execute(create_table_sql)
+    except Error as e:
+        print(e)
+
+## read the maas index page and pull out the URL table;
+## that forms our authoritative source, as it is the final arbiter of links
+def read_index_topic(auth_file, index_topic_number, url, topic_number):
+    
+    # first, let's not reinvent the wheel; 
+    # let's just use dpull, which we already have
+    stream = os.popen('./dpull -n ' + str(index_topic_number) + ' -c ' + auth_file)
+    dictionary = stream.read()
+
+    # find the URL mapping table
+    dictionary = dictionary[dictionary.find('## URLs'):dictionary.find('## Redirects')]
+    
+    # break it up into two lists for the database: url and topic number
+    dictionary_lines = dictionary.split('\n')
+
+    for i in dictionary_lines:
+        if "https" in i:
+            topic_number.append(i.split('|')[1].split('/')[-1])
+            url.append(i.split('|')[2])
+
+## create a link in the table from the passed info
+def create_link(conn, link):
+
+    sql = ''' INSERT INTO links(url, topic_number, last_pushed, last_edited, last_editor) VALUES(?,?,?,?,?) '''
+
+    cur = conn.cursor()
+    cur.execute(sql, link)
+    conn.commit()
+
+    return cur.lastrowid
+
+## process the command line
+try:
+    opts, args = getopt.getopt(sys.argv[1:], "d:a:n:")
+except getopt.GetoptError as err:
+    print(err)
+    print_usage()
+    sys.exit(errno.EINVAL)
+
+if len(sys.argv) < 7:
+    print_usage()
+    sys.exit(errno.EINVAL)
+
+## set option values to recognizable blanks
+db_file = None
+auth_file = None
+index_topic_number = 0
+
+## loop through the passed options
+for o, a in opts:
+    if o == "-d":
+        db_file = a
+    elif o == "-a":
+        auth_file = a
+    elif o == "-n":
+        index_topic_number = a
+    else:
+        assert False
+
+## sanity check in case a weird thing happens
+## (theoretically should never be able to run this code, but....)
+if db_file == None:
+    print("rdbload: no database file specified")
+    print_usage()
+    sys.exit(errno.EINVAL)
+if auth_file == None:
+    print("rdbload: no API auth file specified")
+    print_usage()
+    sys.exit(errno.EINVAL)
+if index_topic_number == 0:
+    print("rdbload: no MAAS docs index topic number specified")
+    print_usage()
+    sys.exit(errno.EINVAL)
+    
+## set up a couple of lists
+url = []
+topic_number = []
+
+## load the create table command
+sql_create_links_table = """CREATE TABLE IF NOT EXISTS links (
+                                id integer PRIMARY KEY,
+                                url text,
+                                topic_number integer,
+                                last_pushed text,
+                                last_edited text,
+                                last_editor text
+                            ); """
+
+## create a connection to the database
+## note that, since the master is in /etc/rad (sudo access required),
+## new databases are recommended to be loaded in the local directory;
+## it is then the user's responsibility to sudo cp it to /etc/rad
+conn = create_connection(db_file)
+
+## this is where we create things if we need to;
+## this looks slightly broken, may have to fix this later
+if conn is not None:
+    create_table(conn, sql_create_links_table)
+else:
+    print("Error: could not create database connection")
+
+## read and parse the index file URL table into internal lists
+read_index_topic(auth_file,index_topic_number,url,topic_number)
+
+entries = len(url)
+cleared = 0
+rotor = 0
+
+## really simple loop that builds the database from the parsed index file URL table
+for u, t in zip(url, topic_number):
+    if rotor == 0:
+        rotor_string = "/"
+    elif rotor == 1:
+        rotor_string = "-"
+    elif rotor == 2:
+        rotor_string = "\\"
+    elif rotor == 3:
+        rotor_string = "|"
+        rotor = -1
+    rotor += 1
+    percent = round(cleared / entries, 3)
+    print(rotor_string, str(percent) + "% complete", end='\r')
+    if "2.7" in u or "2.8" in u:
+        entries =- 1
+        continue
+    ts = subprocess.getoutput("./rlet -n " + t)
+    if rotor == 0:
+        rotor_string = "/"
+    elif rotor == 1:
+        rotor_string = "-"
+    elif rotor == 2:
+        rotor_string = "\\"
+    elif rotor == 3:
+        rotor_string = "|"
+        rotor = -1
+    rotor += 1
+    print(rotor_string, str(percent) + "% complete", end='\r')
+    le = subprocess.getoutput("./rleu -n " + t)
+    print(rotor_string, str(percent) + "% complete", end='\r')
+    link = (u, t, ts, ts, le)
+    create_link(conn, link)

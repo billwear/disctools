@@ -1,0 +1,146 @@
+#!/usr/bin/python3
+
+import sys, json, subprocess, os, errno
+from yaml import load, dump
+
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
+
+def get_topic(config_data, topic):
+    rate_limit_error = True
+    while rate_limit_error == True:
+        proc = subprocess.Popen(
+            [
+                "curl",
+                "-s",
+                "-X",
+                "GET",
+                "-H",
+                "Api-Key: " + config_data["api_key"],
+                "-H",
+                "Api-Username: " + config_data["api_username"],
+                "-H",
+                "Content-Type: application/json",
+                config_data["base_url"] + "/t/{" + str(topic) + "}.json",
+            ],
+            stdout=subprocess.PIPE,
+        )
+        
+        # read the result into a usable buffer
+        output = proc.stdout.read()
+
+        # convert the result to json
+        try:
+            topic_json = json.loads(output)
+
+        except:
+            print("topic " + str(topic) + " doesn't exist; exiting")
+            return "ENOEXIST"
+
+        try:
+            if topic_json["error_type"] == "rate_limit":
+                wait_time = topic_json["extras"]["wait_seconds"]
+                print("waiting for rate limit to pass")
+                rate_limit_error = True
+                time.sleep(wait_time + 5)
+        except:
+            return topic_json
+
+def get_latest_revision_of_post(config_data, post_id):
+    rate_limit_error = True
+    while rate_limit_error == True:
+        proc = subprocess.Popen(
+            [
+                "curl",
+                "-s",
+                "-X",
+                "GET",
+                "-H",
+                "Api-Key: " + config_data["api_key"],
+                "-H",
+                "Api-Username: " + config_data["api_username"],
+                "-H",
+                "Content-Type: application/json",
+                config_data["base_url"] + "/posts/{" + str(post_id) + "}/revisions/latest.json",
+            ],
+            stdout=subprocess.PIPE,
+        )
+        
+        # read the result into a usable buffer
+        output = proc.stdout.read()
+        
+        # convert the result to json
+        try:
+            post_json = json.loads(output)
+        except:
+            print("topic " + str(topic) + " doesn't exist; exiting")
+            return("errno.ENOEXIST")
+        try:
+            if post_json["error_type"] == "rate_limit":
+                wait_time = post_json["extras"]["wait_seconds"]
+                print("waiting for rate limit to pass")
+                rate_limit_error = True
+                time.sleep(wait_time + 5)
+        except:
+            return post_json
+
+        
+def print_usage():
+    print("usage: rlet -n topic_number")
+
+if len(sys.argv) != 3:
+    print_usage()
+    sys.exit()
+
+if sys.argv[1] != "-n":
+    print_usage()
+    sys.exit()
+    
+topic_number = sys.argv[2]
+
+# read config file to get api-key, api-usr, and discourse url
+try:
+    cfile = open("/etc/rad/dc.yaml", "r")
+except:
+    print('rlet: cannot open', path_to_config)
+    print("rlet: exiting")
+    sys.exit(4)
+config_data = load(cfile, Loader=Loader)
+cfile.close()
+
+# pull topic to get its last modification time
+topic_json = get_topic(config_data, topic_number)
+
+# handle a "does not exist" error
+if topic_json == "ENOEXIST":
+    sys.stdout.write("0,0")
+    exit(errno.ENODATA)
+
+# pull the main [0] post id
+try:
+    post_id = topic_json["post_stream"]["posts"][0]["id"]
+except:
+    print(topic_json)
+    sys.exit(errno.EINVAL)
+
+## pull the latest revision of the main post
+post_json = get_latest_revision_of_post(config_data, post_id)
+
+# handle a "does not exist" error
+if post_json == "ENOEXIST":
+    sys.stdout.write("0,0")
+    exit(errno.ENODATA)
+
+## pull the correct timestamp from the latest revision
+try:
+    created_at = post_json["created_at"]
+    username = post_json["username"]
+except:
+    sys.stdout.write("0,0")
+    sys.exit(errno.ENODATA)
+
+sys.stdout.write(created_at + "," + username)
+
+     

@@ -1,0 +1,82 @@
+#!/usr/bin/python3
+
+import maas_rad, maas_discourse
+
+# maas_rad provides:
+### mr_create_rad_version("selector")
+### mr_adjust_links("selector", "database_path")
+### mr_build_switchers("base_url", "database_path")
+### mr_load_rad_database("database_path")
+
+# maas_discourse provides:
+### md_set_credentials("credential_file_path")
+### md_get_topic(int topic_id, list credentials)
+### md_get_latest_revision(int topic_id, list credentials)
+### md_get_post(int post_id, list credentials)
+### md_get_last_edit_timestamp(int topic_id, list credentials)
+### md_is_later_than("timestamp_1", "timestamp_2")
+### md_is_earlier_than("timestamp_1", "timestamp_2")
+### md_is_identical_to("timestamp_1", "timestamp_2")
+### md_get_last_editor_username(int topic_id, list credentials)
+### md_has_been_updated(int topic_id, list credentials)
+
+# needed for argv, stdin, stdout
+import sys, errno
+
+# simple usage statement
+def print_usage():
+    print("usage: rad -s selector")
+
+# there's only one CL option, so this check still works okay
+if len(sys.argv) != 3 or sys.argv[1] != "-s":
+    print_usage()
+    sys.exit(errno.EINVAL)
+
+# selector *must* be at position 2 for this tool
+try:
+    selector = sys.argv[2]
+except:
+    print_usage()
+    sys.exit(errno.EINVAL)
+
+# loop through the incoming text lines
+for line in sys.stdin:
+
+    # if this is a RAD encoding line...
+    if "rad-begin" in line:
+
+        # if the passed selector is in the line...
+        if selector in line:
+
+            # pull the next line from stdin and keep it
+            line = next(sys.stdin)  #1
+
+            # while the next line isn't a "rad-end" line...
+            while "rad-end" not in line:
+
+                # copy the line to stdout
+                sys.stdout.write(line)
+
+                # pull the next line and repeat the loop
+                line = next(sys.stdin)  #2
+
+            # skip forward in the for loop
+            continue;
+
+        # if the passed selector is *not* in the line...
+        if selector not in line:
+
+            # loop through all the lines until you find the "rad-end"
+            while "rad-end" not in line:
+
+                # this effectively removes lines not matching the selector from the output
+                line = next(sys.stdin) #4
+
+            # advance one line and continue the for loop
+            line = next(sys.stdin) #3
+            continue;
+
+    # write the passed line to stdout
+    sys.stdout.write(line)
+
+

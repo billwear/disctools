@@ -1,0 +1,115 @@
+#!/usr/bin/python3
+
+## rlink 1.0, stamped 11:52 22 Jun 2021
+## coded by bill.wear@canonical.com
+
+import os, sys, sqlite3, errno
+from sqlite3 import Error
+
+# function to create sqlite database connection
+def create_connection(db_file):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+        return conn
+    except Error as e:
+        print(e)
+
+    return conn
+
+# function to find all matching substrings in a string
+def find_all(a_str, sub):
+        start = 0
+        while True:
+                start = a_str.find(sub, start)
+                if start == -1: return
+                yield start
+                start += len(sub) # use start += 1 to find overlapping matches
+
+# function to find the topic number for a url/selector combo in the rad database
+def get_topic_number(conn, selector, url):
+
+        # create the matching url
+        db_url = "/docs" + selector + "/" + url
+
+        # attempt to find the matching record in the RAD database
+        cur = conn.cursor()
+        cur.execute("SELECT topic_number from links WHERE url='" + db_url + "'")
+        topic_number = cur.fetchall()
+
+        # clean up the topic number on the way out
+        return int(str(topic_number).split('(')[1].split(',')[0])
+
+# usage message
+def print_usage():
+        print("usage: rlink -s selector")
+        
+# rudimentary command line handling
+if len(sys.argv) != 3 or sys.argv[1] != "-s":
+        print_usage()
+        sys.exit(errno.EINVAL)
+
+# peel the selector out of the argument list
+selector = sys.argv[2]
+
+# preset the dbfile to "none" so we know if there's a error
+dbfile = None
+
+# find the db file
+if os.path.isfile("./rad.db") == True:
+    dbfile = "./rad.db"
+elif os.path.isfile("/etc/rad/rad.db") == True:
+    dbfile = "/etc/rad/rad.db"
+else:
+    print("Error when trying to access RAD database:", os.strerror(errno.ENOENT))
+    print("rad: exiting")
+    sys.exit(errno.ENOENT)
+
+# make a connection to the rad.db database
+conn = create_connection(dbfile)
+
+# pull in the document markdown from stdin; gulping it because links sometimes 
+# span lines; won’t handle that for alpha, but need to be prepared for it
+document_markdown = sys.stdin.read()
+
+# find every instance of “/t/”
+links = list(find_all(document_markdown, '/t/'))
+
+# loop through the list and find all that contain "nnnn"
+for i in links:
+
+        # split on closing parend
+        full_link = document_markdown[i:].split(")")[0]
+
+        # find the topic number part by splitting on "/"
+        topic_part = full_link.split("/")[-1].split("#")[0]
+
+        # is the topic_part an "nnnn"?
+        if topic_part == "nnnn":
+
+                # find the edges of the link
+                where = document_markdown.find("nnnn", i) + 4
+                if where == -1:
+                        continue
+
+                # pull out the base url 
+                base_url = document_markdown[i:where].split("/")[-2]
+
+                # find the topic number
+                topic_number = get_topic_number(conn, selector, base_url)
+
+                # form up the replacement link
+                repl_link = "/t/" + base_url + "/" + str(topic_number)
+
+                # form up the original link
+                orig_link = document_markdown[i:where]
+
+                # make the replacements in the document markdown
+                # (we don't care if it replaces them more than once, just saves us some time)
+                document_markdown = document_markdown.replace(orig_link,repl_link)
+
+# output the fixed RAD document to stdout
+sys.stdout.write(document_markdown)
+
+
+
