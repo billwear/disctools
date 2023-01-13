@@ -1,0 +1,8 @@
+#!/usr/bin/python3
+
+from discourse import Discourse_Site
+from discourse import Discourse_Doc
+
+maas_docs = Discourse_Site()
+
+maas_discourse_doc = Discourse_Doc(maas_docs)

@@ -1,0 +1,69 @@
+#!/bin/bash -x
+# this script updates the entire HTML library to match the latest markdown docs
+# - uses tab2html to create html from tabbed discourse markdown source
+# - runs from MIN_VSN to MAX_VSN
+# - automatically runs every .md filename in the indicated offline repostiory
+# - receives maas version to run in $1
+
+# maximum maas version to update
+VERSION=3.3
+
+# pathname variables
+GIT_REPO_ABS_PATH="/home/stormrider/usr/src/maas-offline-docs"
+GIT_MD_ABS_PATH="$GIT_REPO_ABS_PATH/src"
+GIT_HTML_DEB_ABS_PATH="$GIT_REPO_ABS_PATH/production-html-deb"
+GIT_HTML_SNAP_ABS_PATH="$GIT_REPO_ABS_PATH/production-html-snap"
+GIT_HTML_TEMPLATES_ABS_PATH="$GIT_REPO_ABS_PATH/html-support/templates/$VERSION"
+LOG="/tmp/tab2html.log"
+
+cd "$GIT_MD_ABS_PATH"
+for basename in maas-documentation-25.md
+do
+    # peel topic number out of basename
+    NAME=$(echo "$basename" | cut -f 1 -d '.')
+    TOPIC_NUMBER=$(echo "$NAME" | rev | cut -f 1 -d'-' | rev)
+
+    # compute name of html file
+    HTMLNAME=$(echo "$NAME" | rev | cut -f 2- -d'-' | rev)".html"
+
+    # sed command to allow UI/CLI iso-page switching
+    sedcmd="s/zork/$HTMLNAME/g"
+
+     # get the document's title, for HTML purposes (stored in comment, first line)
+    read firstline<$basename
+    TITLE=$(sed -e's/^[^"]*\"\([^"]*\).*$/\1/g' <<< $firstline)
+
+    # run the snap ui version of the html to production
+    tab2html "v$VERSION Snap" "UI" "$TITLE" -i $basename -l -L $LOG -o $GIT_HTML_SNAP_ABS_PATH/ui/$HTMLNAME -t $GIT_HTML_TEMPLATES_ABS_PATH/snap/ui/template.html
+    sed -i -e"$sedcmd" $GIT_HTML_SNAP_ABS_PATH/ui/$HTMLNAME
+
+    # run the deb ui version of the html
+    tab2html "v$VERSION Packages" "UI" "$TITLE" -i $basename -l -L $LOG -o $GIT_HTML_DEB_ABS_PATH/ui/$HTMLNAME -t $GIT_HTML_TEMPLATES_ABS_PATH/deb/ui/template.html
+    sed -i -e"$sedcmd" $GIT_HTML_DEB_ABS_PATH/ui/$HTMLNAME
+
+    # run the snap cli version of the html
+    tab2html "v$VERSION Snap" "CLI" "$TITLE" -i $basename -l -L $LOG -o $GIT_HTML_SNAP_ABS_PATH/cli/$HTMLNAME -t $GIT_HTML_TEMPLATES_ABS_PATH/snap/cli/template.html
+    sed -i -e"$sedcmd" $GIT_HTML_SNAP_ABS_PATH/cli/$HTMLNAME
+
+    # run the deb cli version of the html
+    tab2html "v$VERSION Packages" "CLI" "$TITLE" -i $basename -l -L $LOG -o $GIT_HTML_DEB_ABS_PATH/cli/$HTMLNAME -t $GIT_HTML_TEMPLATES_ABS_PATH/snap/cli/template.html
+    sed -i -e"$sedcmd" $GIT_HTML_DEB_ABS_PATH/cli/$HTMLNAME
+
+    # copy images to production HTML root
+    cp /tmp/images/* $GIT_HTML_SNAP_ABS_PATH/images
+    cp /tmp/images/* $GIT_HTML_DEB_ABS_PATH/images
+done
+
+# fix the maas-documentation-25.html files (name needed for clarity)
+# -- including the base maas-documentation-25.html used as a landing page
+# run the snap ui version of the html to production
+mv $GIT_HTML_SNAP_ABS_PATH/ui/maas-documentation.html $GIT_HTML_SNAP_ABS_PATH/ui/maas-documentation-25.html
+mv $GIT_HTML_DEB_ABS_PATH/ui/maas-documentation.html $GIT_HTML_DEB_ABS_PATH/ui/maas-documentation-25.html
+mv $GIT_HTML_SNAP_ABS_PATH/cli/maas-documentation.html $GIT_HTML_SNAP_ABS_PATH/ui/maas-documentation-25.html
+mv $GIT_HTML_DEB_ABS_PATH/cli/maas-documentation.html $GIT_HTML_DEB_ABS_PATH/ui/maas-documentation-25.html
+# run the snap ui version of maas landing page to production
+tab2html "v$VERSION Snap" "UI" "MAAS Documentation" -i "$GIT_REPO_ABS_PATH/src/maas-documentation-25.md" -l -L $LOG -o "$GIT_HTML_SNAP_ABS_PATH/maas-documentation-25.html" -t $GIT_HTML_TEMPLATES_ABS_PATH/snap/template.html
+sed -i -e's/maas-documentation.html/maas-documentation-25.html/ "$GIT_HTML_SNAP_ABS_PATH/ui/maas-documentation-25.html"'
+# run the deb ui version of maas landing page to production
+tab2html "v$VERSION Packages" "UI" "MAAS Documentation" -i "$GIT_REPO_ABS_PATH/src/maas-documentation-25.md" -l -L $LOG -o "$GIT_HTML_DEB_ABS_PATH/maas-documentation-25.html" -t $GIT_HTML_TEMPLATES_ABS_PATH/deb/template.html
+# sed -i -e"$sedcmd" $GIT_HTML_DEB_ABS_PATH/ui/$HTMLNAME

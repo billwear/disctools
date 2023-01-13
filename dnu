@@ -1,0 +1,27 @@
+#!/usr/bin/python3
+
+from ddoc import Discourse_doc
+
+new_discourse_doc = Discourse_doc()
+
+#user-defined function is called from object 1 
+title = new_discourse_doc.get_title()
+topic = new_discourse_doc.get_topic_number()
+auth_file = new_discourse_doc.get_dc_auth_file()
+
+print("title is",title,", topic # is",topic, ", auth file is",auth_file)
+
+# create new discourse article with specified title
+#   and dummy text to meet 20-character requirement
+
+# get topic number of new discourse article
+
+# create new markdown (.md) file in repo directory
+#   with title and topic number as filename
+
+# load html title into document in HTML comment for
+#   later use when creating HTML version of the .md file
+
+# push updated .md file (with HTML title comment)
+#   up to newly-created discourse topic, to start process
+

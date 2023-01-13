@@ -1,0 +1,17 @@
+#!/bin/bash
+
+grep -e "<h2" -e "<h3" -e "<h4" -e "<h5" -e "\[tab " -e "\[\/tab\]" *.md \
+| sed -e's/^\(.*\)-[0-9]*.md:\(.*\)$/\2 : \1/' \
+| sed -e's/<a href="#heading--[a-zA-Z0-9_-]*">//g' \
+| sed -e's/ id="heading--[a-zA-Z0-9-]*"//g' \
+| sed -e's/<\/a>//g' \
+| sed -e's/version="[vSnapPckges32109., ]*"//g' \
+| sed -e's/\[tab  view="/* open-tab: /g' \
+| sed -e's/"\]//g' \
+| sed -e's/\[\/tab\]/* close-tab/g' \
+| sed -e's/\[tab \]/* open-tab/g' \
+| sed -e's/<\/h[2-5]>//g' \
+| sed -e's/<h2>/** /g' \
+| sed -e's/<h3>/*** /g' \
+| sed -e's/<h4>/**** /g' \
+| sed -e's/<h5>/***** /g'

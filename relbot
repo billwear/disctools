@@ -1,0 +1,11 @@
+#!/bin/bash
+#
+# relbot: automate process of updating release notes, as much as possible
+## update the release name everywhere
+## create and populate the bug list
+## add new features
+## get the full release name from the user
+## replace all text instances of the release name
+## create the release name heading anchor string
+## create the bug list heading for this new release
+## create the bug list anchor 

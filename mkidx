@@ -1,0 +1,109 @@
+#!/usr/bin/python3
+#+AUTHOR: billwear, stormrider, WA5149
+#+TITLE: mkidx
+#+DATE: created 2022-07-07
+#+DESCRIPTION:
+# reads a Discourse markdown file specified on the command line,
+# builds a linked permuted index of all headings in the file,
+# and outputs said index in markdown table format to stdout.
+# NOTE: reads from a file, only, because filename is needed for links.
+# NOTE: outputs to stdout only, because multiple markdowns make one index.
+# NOTE: eliminates any duplicate entries as the last step.
+# NOTE: does not sort; multiple markdowns >> one file, manual sort later.
+
+import argparse, logging, sys, re
+
+parser = argparse.ArgumentParser(
+    description="build permuted heading index from .md file & send to stdout",
+    epilog="---------")
+parser.add_argument("-i", type=str, metavar="MD_FILENAME",
+		    help="input markdown filename (default: stdin)")
+parser.add_argument("-l", action="count", help="increase log levels")
+parser.add_argument("-L", type=str, default="/tmp/mkidx.log",
+                    metavar="LOG_FILENAME",
+                    help="log filename (default: /tmp/mkidx.log)")
+
+args = parser.parse_args()
+
+loglevel = logging.WARNING
+if args.l == 1:
+    loglevel = logging.INFO
+elif args.l == 2:
+    loglevel = logging.WARNING
+elif args.l == 3:
+    loglevel = logging.ERROR
+elif args.l == 4:
+    loglevel = logging.CRITICAL
+elif args.l == 5:
+    loglevel = logging.DEBUG
+
+logging.basicConfig(filename=args.L,level=loglevel,format='%(asctime)s %(levelname)s %(message)s')
+
+logging.info('\n-------------- new run started -----------------')
+logging.info('input file: %s', args.i)
+
+logging.info('attempting to read input file')
+try:
+    mdfile = open(args.i, "r")
+except:
+    logging.warning('could not open input file %s: aborting',
+                    args.i)
+    print('could not open input file',args.i,': aboring')
+    sys.exit(-1)
+
+rawinbuf = mdfile.read()
+mdfile.close()
+logging.info('successfully read input file')
+
+logging.debug('parsing input file name into base link for anchors')
+nameparts = ((args.i).split(".")[0]).split("-")
+basename = "/t/"
+for i in range(0,len(nameparts)):
+    basename += nameparts[i]
+    if i < len(nameparts)-2:
+        basename += "-"
+    if i == len(nameparts)-2:
+        basename += "/"
+
+outbuf = []
+line = ""
+
+logging.info('splitting input file into lines')
+lines = re.split('\n',rawinbuf)
+
+for x in lines:
+    logging.debug('processing line:' + x + "\n")
+    if x.find('<h') > 0:
+       if x.find('<http') > 0 or x.find('<hostname') > 0:
+           continue
+       logging.debug('found heading line:',x)
+       anchor = basename + x.split('"')[1]
+       text = (x.split('>')[2]).split('<')[0]
+       words = text.split(" ")
+       for starting_word in range(0,len(words)):
+          line = "| ["
+          ending_word = starting_word - 1
+          if ending_word < 0:
+             ending_word = 0
+          for word in range(starting_word,len(words)):
+            line += words[word]
+            if word != len(words)-1:
+               line += " "
+          if starting_word != 0:
+            line += "](" + anchor + ") |"
+          if starting_word == 0:
+             line += "](" + anchor + ") | |"
+             outbuf.append(line)
+             continue
+          for word in range(0,starting_word):
+            line += words[word]
+            if word != starting_word-1:
+               line += " "
+          line += " |"
+          outbuf.append(line)
+
+outbuf = list(dict.fromkeys(outbuf))
+
+for ln in outbuf:
+   print(ln)
+          
