@@ -1,0 +1,77 @@
+#!/usr/bin/python3
+
+# how do i use the standard error library?
+import errno
+ENOERR = 0
+
+# how do i communicate with the MAAS discourse API?
+import maas_discourse
+
+# how do i pull options and arguments from the command line?
+import getopt
+
+# how do i execute system commands?
+import sys
+
+# how do i process json datasets?
+import json
+
+## what do i need this program to do?
+def usage():
+    print("putdoc -t topic_number [-c config_file]")
+    print("   post contents of stdin to discourse topic_number")
+    print("   config_file defaults to \"/etc/rad/dc.yaml\"")
+
+# where do i get the topic_id and the API credentials file?
+try:
+    opts, args = getopt.getopt(sys.argv[1:], "t:c:")
+except getopts.GetoptErr as err:
+    print(err)
+    sys.exit(errno.EINVAL)
+
+# how do i get the topic_id from the command line?
+topic_number = 0
+for o, a in opts:
+    if o == "-t":
+        topic_number = a
+
+# what do i do if they didn't type a topic number?
+if topic_number == 0:
+    usage()
+    sys.exit(errno.EINVAL)
+    
+# how do i get the credentials filename from the command line?
+credentials_filename = "/etc/rad/dc.yaml"
+for o, a in opts:
+    if o == "-c":
+        credentials_filename = a
+
+# how do i retrieve the credentials from the credentials file?
+error, credentials = maas_discourse.md_get_credentials(credentials_filename)
+if error != ENOERR:
+    print("error number", error, "trying to retrieve the API credentials")
+    sys.exit(errno.EINVAL)
+
+# how do i load the markdown to post?
+markdown = sys.stdin.read()
+
+# how do i get the topic_json?
+error, topic_json = maas_discourse.md_api_get_topic( topic_number, credentials)
+if error != ENOERR:
+    print("error number", error," trying to retrieve topic", topic_number, "from discourse")
+    sys.exit(errno.EINVAL)
+
+# how do i get the post_id?
+error, post_number = maas_discourse.md_get_post_number(topic_json)
+if error != ENOERR:
+    print("error number", error," trying to retrieve post_id from ", topic_number, "JSON")
+    sys.exit(errno.EINVAL)
+
+# how do i write the markdown file to discoure?
+error, new_json = maas_discourse.md_api_put_post( post_number, markdown, credentials )
+if error != ENOERR:
+    print("error number", error," trying to write new markdown tox", topic_number, "in discourse")
+    sys.exit(errno.EINVAL)
+
+
+

@@ -1,0 +1,99 @@
+#!/usr/bin/python3
+
+# how do i use the standard error library?
+import errno
+ENOERR = 0
+
+# how do i communicate with the MAAS discourse API?
+import maas_discourse
+
+# how do i pull options and arguments from the command line?
+import getopt
+
+# how do i execute system commands?
+import sys
+
+# how do i process json datasets?
+import json
+
+## what do i need this program to do?
+def usage():
+    print("retitle -t topic_number -T new_title [-c config_file]")
+    print("   update the title of  discourse topic_number")
+    print("   config_file defaults to \"/etc/rad/dc.yaml\"")
+
+# where do i get the topic_id and the API credentials file?
+try:
+    opts, args = getopt.getopt(sys.argv[1:], "t:c:T:")
+except getopts.GetoptErr as err:
+    print(err)
+    sys.exit(errno.EINVAL)
+
+# how do i get the topic_id from the command line?
+topic_number = 0
+for o, a in opts:
+    if o == "-t":
+        topic_number = a
+
+# what do i do if they didn't type a topic number?
+if topic_number == 0:
+    usage()
+    sys.exit(errno.EINVAL)
+    
+# how do i get the new_title from the command line?
+new_title = "blank"
+for o, a in opts:
+    if o == "-T":
+        new_title = a
+
+# what do i do if they didn't type a topic number?
+if new_title == "blank":
+    usage()
+    sys.exit(errno.EINVAL)
+
+# how do i get the credentials filename from the command line?
+credentials_filename = "/etc/rad/dc.yaml"
+for o, a in opts:
+    if o == "-c":
+        credentials_filename = a
+
+# how do i retrieve the credentials from the credentials file?
+error, credentials = maas_discourse.md_get_credentials(credentials_filename)
+if error != ENOERR:
+    print("error number", error, "trying to retrieve the API credentials")
+    sys.exit(errno.EINVAL)
+
+# how do i get the topic_json?
+error, topic_json = maas_discourse.md_api_get_topic( topic_number, credentials)
+if error != ENOERR:
+    print("error number", error," trying to retrieve topic", topic_number, "from discourse")
+    sys.exit(errno.EINVAL)
+
+# how do i get the post_id?
+error, post_number = maas_discourse.md_get_post_number(topic_json)
+if error != ENOERR:
+    print("error number", error," trying to retrieve post_id from ", topic_number, "JSON")
+    sys.exit(errno.EINVAL)
+
+# how do i pull the main post, so i can pull the markdown out of that?
+error, post_json = maas_discourse.md_api_get_post( post_number, credentials )
+if error != ENOERR:
+    print("error number", error," trying to get main post JSON for topic", topic_number, "from discourse")
+    sys.exit(errno.EINVAL)
+
+# how do i retrive the post markdown, which is needed for the putback?
+error, post_markdown = maas_discourse.md_get_markdown_content( post_json )
+if error != ENOERR:
+    print("error number", error," trying to get main post markdown for topic", topic_number, "from discourse")
+    sys.exit(errno.EINVAL)
+
+# how do i write the markdown file to discoure?
+error, new_json = maas_discourse.md_api_change_title( post_number, post_markdown, new_title, credentials )
+if error != ENOERR:
+    print("error number", error," trying to change title of topic", topic_number, "in discourse")
+    sys.exit(errno.EINVAL)
+
+print(new_json)
+
+
+
