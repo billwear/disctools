@@ -5,7 +5,10 @@
 rescue_staged=false
 
 # master markdown absolute pathname
-GIT_MD_ABSPATH=$1
+GIT_MD_FILENAME=$1
+
+# compute absolute path (hardcoded for convenience)
+GIT_MD_ABSPATH="/home/stormrider/src/mod/maas-offline-docs/src/$1"
 
 while getopts s flag
 do
