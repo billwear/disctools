@@ -1,0 +1,36 @@
+[
+    {
+	"table":
+	{
+	    "name": "Successfully-deployed MAAS images",
+	    "rows":
+	    [
+		{
+		    "Image Name": "CentOS7",
+		    "OS Version": "7.8.2"
+		},
+		{
+		    "Image Name": "RHEL 8",
+		    "OS Version": "8.9"
+		}
+	    ]
+	}
+    },
+    {
+	"table":
+	{
+	    "name": "Retired MAAS images",
+	    "rows":
+	    [
+		{
+		    "Image Name": "CentOS6",
+		    "OS Version": "All"
+		},
+		{
+		    "Image Name": "RHEL 7",
+		    "OS Version": "All"
+		}
+	    ]
+	}
+    }
+]
