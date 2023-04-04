@@ -1,50 +1,48 @@
-#!/bin/bash
-# $1 = git master markdown filename, absolute path
+#!/bin/bash -x
+# disced -m markdown-filename.md -s -n -v <maas-version> -p <base-markdown-repo-path>
+# where:
+#   -m = markdown-filename with extension
+#   -s = use the last staged copy of the document, not the github master
+#   -n = don't publish to discourse (for working on unreleased doc)
+#   -v = MAAS version to publish (using tabs), e.g., 3.4 (default current)
+#   -p = base markdown repo path (defaults to ~/src/mod/maas-offline-docs)
+#
 
-# preset flag for "rescue the staged version from last time" to false
-rescue_staged=false
+# presets
+rescue_staged=false   # true = use the last staged version, instead of master
+dont_publish=false    # true = don't publish to discourse
+VERSION="3.3"         # maas version, used for finding doc repo
+BASE_PATH="/home/stormrider/src/mod/maas-offline-docs" # default base path
+BENCH="/tmp/bench"    # where the workbench is stored
+STAGE="/tmp/staging"  # where the new markdown document is staged
+GALLEY="4917"         # fixed topic for galley proof
+LOG="$STAGE/log/tab2html.log"  # where we log html conversion actions
 
-# master markdown absolute pathname
-GIT_MD_FILENAME=$1
+# markdown filename, must be passed as first replaceable parameter
+GIT_MD_BASENAME=$1
 
-# compute absolute path (hardcoded for convenience)
-GIT_MD_ABSPATH="/home/stormrider/src/mod/maas-offline-docs/src/$1"
-
-while getopts s flag
-do
-    case "${flag}" in
-        s) rescue_staged=true;;
+while getopts m:sv:p:n flag; do
+    case "$flag" in
+	m) GIT_MD_BASENAME=$OPTARG ;;
+        s) rescue_staged=true ;;
+	v) VERSION=$OPTARG ;;
+	p) BASE_PATH=$OPTARG ;;
+	n) dont_publish=true ;;
     esac
 done
 
-if $rescue_staged ; then
-    echo "substituting previously staged file for git original"
-    GIT_MD_ABSPATH=$2
-fi
+# compute absolute path to markdown file
+GIT_MD_ABSPATH="$BASE_PATH-$VERSION/src/$GIT_MD_BASENAME"
 
-# MAAS version desired
-VERSION="main"
-
-# workbench dir
-BENCH="/tmp/bench"
-
-# staging directory, if we get that far
-STAGE="/tmp/staging"
-
-# staging topic number (galley proof topic, etc)
-GALLEY="4917"
-
-# conversion logging directory, if we get that far
-LOG="$STAGE/log/tab2html.log"
-
-# path to master markdown
+# compute the repo root, so we can store production html, if we get that far
 GIT_MD_DIR="$(dirname "${GIT_MD_ABSPATH}")"
-
-# compute path git repo root, for production html, if we get that far
 GIT_REPO_ROOT="$GIT_MD_DIR/.."
 
-# get base filename
-GIT_MD_BASENAME="$(basename "${GIT_MD_ABSPATH}")"
+# if we're using the previously staged version, different absolute path
+if $rescue_staged ; then
+    echo "substituting previously staged file for git original"
+    GIT_MD_ABSPATH="$STAGE/$GIT_MD_BASENAME"
+fi
 
 # peel topic number out of basename
 NAME=$(echo "$GIT_MD_BASENAME" | cut -f 1 -d '.')
@@ -143,22 +141,22 @@ cat $BENCH/$GIT_MD_BASENAME | tee $STAGE/markdown/$GIT_MD_BASENAME | dpush -n $G
 echo "markdown source at file:///$STAGE/markdown/$GIT_MD_BASENAME"
 
 # run the snap ui version of the html
-tab2html "v$VERSION Snap" "UI" "$TITLE" -i $BENCH/$GIT_MD_BASENAME -lllll -L $LOG -o $STAGE/production-html-snap/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/ui/template.html
+tab2html "v$VERSION Snap" "UI" "$TITLE" -i $BENCH/$GIT_MD_BASENAME -lllll -L $LOG -o $STAGE/production-html-snap/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/$VERSION/snap/ui/template.html
 sed -i -e"$sedcmd" $STAGE/production-html-snap/ui/$HTMLNAME
 echo "SNAP UI HTML at file:///$STAGE/production-html-snap/ui/$HTMLNAME"
 
 # run the deb ui version of the html; don't do images again
-tab2html "v$VERSION Packages" "UI" "$TITLE" -s -i $BENCH/$GIT_MD_BASENAME -l -L $LOG -o $STAGE/production-html-deb/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/deb/ui/template.html
+tab2html "v$VERSION Packages" "UI" "$TITLE" -s -i $BENCH/$GIT_MD_BASENAME -l -L $LOG -o $STAGE/production-html-deb/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/$VERSION/deb/ui/template.html
 sed -i -e"$sedcmd" $STAGE/production-html-deb/ui/$HTMLNAME
 echo "DEB UI HTML at file:///$STAGE/production-html-deb/ui/$HTMLNAME"
 
 # run the snap cli version of the html; don't do images again
-tab2html "v$VERSION Snap" "CLI" "$TITLE" -s -i $BENCH/$GIT_MD_BASENAME -l -L $LOG -o $STAGE/production-html-snap/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/cli/template.html
+tab2html "v$VERSION Snap" "CLI" "$TITLE" -s -i $BENCH/$GIT_MD_BASENAME -l -L $LOG -o $STAGE/production-html-snap/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/$VERSION/snap/cli/template.html
 sed -i -e"$sedcmd" $STAGE/production-html-snap/cli/$HTMLNAME
 echo "SNAP CLI HTML at file:///$STAGE/production-html-snap/cli/$HTMLNAME"
 
 # run the deb cli version of the html; don't do images again
-tab2html "v$VERSION Packages" "CLI" "$TITLE" -s -i $BENCH/$GIT_MD_BASENAME -l -L $LOG -o $STAGE/production-html-deb/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/cli/template.html
+tab2html "v$VERSION Packages" "CLI" "$TITLE" -s -i $BENCH/$GIT_MD_BASENAME -l -L $LOG -o $STAGE/production-html-deb/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/$VERSION/snap/cli/template.html
 sed -i -e"$sedcmd" $STAGE/production-html-deb/cli/$HTMLNAME
 echo "DEB CLI HTML at file:///$STAGE/production-html-deb/cli/$HTMLNAME"
 
@@ -167,17 +165,23 @@ cp /tmp/images/* $STAGE/production-html-snap/images
 cp /tmp/images/* $STAGE/production-html-deb/images
 
 # ask whether to make these changes permanent
-read -e -p "Upload changes to discourse & HTML docs? [Y/n] " YN
-
-# if no, just exit, we're done here for now
-[[ $YN == "n" || $YN == "N" || $YN == "" ]] && exit
-
-## if yes, push changes for real
-# copy the (potentially edited) discourse markdown back to the git repo
-cp $BENCH/$GIT_MD_BASENAME $GIT_MD_ABSPATH
-
-# push the discourse markdown up to the docs discourse
-cat $GIT_MD_ABSPATH | dpush -n $TOPIC_NUMBER
+if $dont_publish ; then
+    read -e -p "Upload changes to HTML docs? [Y/n] " YN
+    # if no, just exit, we're done here for now
+    [[ $YN == "n" || $YN == "N" || $YN == "" ]] && exit
+    ## if yes, save changes
+    # copy the (potentially edited) discourse markdown back to the git repo
+    cp $BENCH/$GIT_MD_BASENAME $GIT_MD_ABSPATH
+else
+    read -e -p "Upload changes to discourse and HTML docs? [Y/n] " YN
+    # if no, just exit, we're done here for now
+    [[ $YN == "n" || $YN == "N" || $YN == "" ]] && exit
+    ## if yes, save changes
+    # copy the (potentially edited) discourse markdown back to the git repo
+    cp $BENCH/$GIT_MD_BASENAME $GIT_MD_ABSPATH
+    # push the discourse markdown up to the docs discourse
+    cat $GIT_MD_ABSPATH | dpush -n $TOPIC_NUMBER
+fi
 
 ## IMPORTANT NOTE ##############################################################
 # if you enter the script at this point, you may not have images in the
@@ -185,19 +189,19 @@ cat $GIT_MD_ABSPATH | dpush -n $TOPIC_NUMBER
 ################################################################################
 
 # run the snap ui version of the html to production
-tab2html "v$VERSION Snap" "UI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-snap/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/ui/template.html
+tab2html "v$VERSION Snap" "UI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-snap/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/$VERSION/snap/ui/template.html
 sed -i -e"$sedcmd" $GIT_REPO_ROOT/production-html-snap/ui/$HTMLNAME
 
 # run the deb ui version of the html
-tab2html "v$VERSION Packages" "UI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-deb/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/deb/ui/template.html
+tab2html "v$VERSION Packages" "UI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-deb/ui/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/$VERSION/deb/ui/template.html
 sed -i -e"$sedcmd" $GIT_REPO_ROOT/production-html-deb/ui/$HTMLNAME
 
 # run the snap cli version of the html
-tab2html "v$VERSION Snap" "CLI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-snap/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/cli/template.html
+tab2html "v$VERSION Snap" "CLI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-snap/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/$VERSION/snap/cli/template.html
 sed -i -e"$sedcmd" $GIT_REPO_ROOT/production-html-snap/cli/$HTMLNAME
 
 # run the deb cli version of the html
-tab2html "v$VERSION Packages" "CLI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-deb/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/3.3/snap/cli/template.html
+tab2html "v$VERSION Packages" "CLI" "$TITLE" -i $GIT_MD_ABSPATH -l -L $LOG -o $GIT_REPO_ROOT/production-html-deb/cli/$HTMLNAME -t $GIT_REPO_ROOT/html-support/templates/$VERSION/snap/cli/template.html
 sed -i -e"$sedcmd" $GIT_REPO_ROOT/production-html-deb/cli/$HTMLNAME
 
 # copy images to production HTML root

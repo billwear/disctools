@@ -1,0 +1,174 @@
+#!/usr/bin/python3
+
+import sys, json, subprocess, os
+from yaml import load, dump
+
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
+
+
+def get_topic(config_data, topic):
+    rate_limit_error = True
+    while rate_limit_error == True:
+        proc = subprocess.Popen(
+            [
+                "curl",
+                "-s",
+                "-X",
+                "GET",
+                "-H",
+                "Api-Key: " + config_data["api_key"],
+                "-H",
+                "Api-Username: " + config_data["api_username"],
+                "-H",
+                "Content-Type: application/json",
+                config_data["base_url"] + "/t/{" + str(topic) + "}.json",
+            ],
+            stdout=subprocess.PIPE,
+        )
+        
+        # read the result into a usable buffer
+        output = proc.stdout.read()
+        
+        # convert the result to json
+        try:
+            topic_json = json.loads(output)
+        except:
+            print("topic " + str(topic) + " doesn't exist; exiting")
+            sys.exit(4)
+        try:
+            if topic_json["error_type"] == "rate_limit":
+                wait_time = topic_json["extras"]["wait_seconds"]
+                print("waiting for rate limit to pass")
+                rate_limit_error = True
+                time.sleep(wait_time + 5)
+        except:
+            return topic_json
+
+def get_post(config_data, post_id):
+    rate_limit_error = True
+    while rate_limit_error == True:
+        proc = subprocess.Popen(
+            [
+                "curl",
+                "-s",
+                "-X",
+                "GET",
+                "-H",
+                "Api-Key: " + config_data["api_key"],
+                "-H",
+                "Api-Username: " + config_data["api_username"],
+                "-H",
+                "Content-Type: application/json",
+                config_data["base_url"] + "/posts/{" + str(post_id) + "}.json",
+            ],
+            stdout=subprocess.PIPE,
+        )
+        
+        # read the result into a usable buffer
+        output = proc.stdout.read()
+        
+        # convert the result to json
+        try:
+            post_json = json.loads(output)
+        except:
+            print("topic " + str(topic) + " doesn't exist; exiting")
+            sys.exit(4)
+        try:
+            if post_json["error_type"] == "rate_limit":
+                wait_time = post_json["extras"]["wait_seconds"]
+                print("waiting for rate limit to pass")
+                rate_limit_error = True
+                time.sleep(wait_time + 5)
+        except:
+            return post_json
+
+
+def print_usage():
+    print("usage: dpush -n topic_number")
+
+if len(sys.argv) != 3:
+    print_usage()
+    sys.exit()
+
+if sys.argv[1] != "-n":
+    print_usage()
+    sys.exit()
+    
+topic_number = sys.argv[2]
+
+# read config file to get api-key, api-usr, and discourse url
+try:
+    cfile = open("/home/stormrider/.config/rad/dc.yaml", "r")
+except:
+    print('dpush: cannot open', path_to_config)
+    print("dpush: exiting")
+    sys.exit(4)
+config_data = load(cfile, Loader=Loader)
+cfile.close()
+
+# read stdin in one slurp
+file_contents = sys.stdin.read()
+
+# get the topic_json to get the post_id, which we need to push
+topic_json = get_topic(config_data, topic_number)
+
+# extract the post ID from the topic json
+try:
+    post_id = topic_json["post_stream"]["posts"][0]["id"]
+except:
+    print(topic_json)
+    print('xpub: error trying to read post_id, point 3')
+    print("error type should be:",topic_json["error_type"])
+    print("xpub: exiting")
+    sys.exit(551)
+category = topic_json["category_id"]
+
+# pad the markdown to 9000 chars to avoid discourse bug
+file_contents = file_contents.ljust(9000)
+
+# create a dictionary buffer for the markdown
+data = {}
+
+# place the markdown in the appropriate json keys
+data["raw"] = file_contents
+
+# open a temporary json file to store the markdown as json
+f = open("foo.json", "w")
+
+# convert the markdown to json and store it in the temp file
+f.write(json.dumps(data))
+
+# close the temp file for completeness
+f.close()
+
+# set the url and auth data as read from the yaml config file
+url = config_data["base_url"] + "/posts/{" + str(post_id) + "}.json"
+apikey = "Api-Key: " + config_data["api_key"]
+apiusername = "Api-Username: " + config_data["api_username"]
+
+# use the curl command to re-post the markdown into discourse
+response = subprocess.check_output(
+    [
+        "curl",
+        "-s",
+        "-X",
+        "PUT",
+        url,
+        "-H",
+        apikey,
+        "-H",
+        apiusername,
+        "-H",
+        "Content-Type: application/json",
+        "-d",
+        "@foo.json",
+    ]
+)
+
+print("ran the curl command")
+
+# remove the temporary json file
+os.remove("foo.json")
