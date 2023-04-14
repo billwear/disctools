@@ -1,0 +1,99 @@
+#!/bin/fades -q
+
+"""
+Script for identifying redirects in Discourse that are already present in a redirects.yaml file
+
+We also need some dependencies installed for speed, installed by fades:
+    lxml
+"""
+
+import bs4  # fades beautifulsoup4
+
+import requests  # fades
+import yaml  # fades PyYAML
+
+import argparse
+import dataclasses
+import json
+import sys
+from typing import Iterable
+
+
+@dataclasses.dataclass
+class Redirect:
+    source: str
+    destination: str
+
+
+def grab_discourse_content(url: str) -> str:
+    r = requests.get(url + ".json")
+    return str(r.json()["post_stream"]["posts"][0]["cooked"])
+
+
+def get_website_redirects(fh) -> list[Redirect]:
+    data = yaml.safe_load(fh)
+    return [Redirect(source, dest) for source, dest in data.items()]
+
+
+def generate_redirects_from_discourse(str) -> Iterable[Redirect]:
+    soup = bs4.BeautifulSoup(
+        str, "lxml", parse_only=bs4.SoupStrainer(["h2", "details"])
+    )
+    header = soup.find("h2", text="Redirects")
+    tbody = header.find_next_sibling().tbody
+    for row in tbody("tr", recursive=False):
+        source, destination = row.stripped_strings
+        # Redirects in Discourse have a leading /, let's strip it
+        yield Redirect(source[1:], destination)
+
+
+def check_for_redundant_redirects(website_redirects: Iterable[Redirect], discourse_redirects: Iterable[Redirect]) -> None:
+    """Do we have any redirects in Discourse that are already in the website?"""
+    sources = {redirect.source: redirect for redirect in website_redirects}
+    for redirect in discourse_redirects:
+        if redirect.source in sources:
+            print(
+                f"Redirect for {redirect.source} to {redirect.destination} is already in the website, and is redundant in Discourse"
+            )
+
+
+def check_for_non_terminals(redirects: Iterable[Redirect]) -> None:
+    """Do we have any redirects with destinations that themselves are redirects?"""
+    sources = {redirect.source: redirect for redirect in redirects}
+    for redirect in redirects:
+        next_redirect = sources.get(redirect.destination[1:])
+        if next_redirect:
+            print(
+                f"Non-terminal redirect found for {redirect.source} to {redirect.destination} on to {next_redirect.destination}"
+            )
+
+
+def check_for_valid_destination(redirects: Iterable[Redirect]) -> None:
+    for redirect in redirects:
+        url = f"https://maas.io/{redirect.destination}"
+        response = requests.head(url)
+        if response.status_code != 200:
+            print(f"Got {response.status_code} for {url} from {redirect.source}")
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "discourse_url", help="URL for discourse topic containing redirects"
+    )
+    parser.add_argument("redirects_yaml", help="Path to redirects.yaml file", type=open)
+    args = parser.parse_args(argv)
+    discourse_contents = grab_discourse_content(args.discourse_url)
+    website_redirects = get_website_redirects(args.redirects_yaml)
+    discourse_redirects = list(generate_redirects_from_discourse(discourse_contents))
+
+    check_for_redundant_redirects(website_redirects, discourse_redirects)
+    check_for_non_terminals(website_redirects)
+    check_for_non_terminals(discourse_redirects)
+    # check_for_valid_destination(website_redirects)
+    # check_for_valid_destination(discourse_redirects)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

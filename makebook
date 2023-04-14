@@ -1,0 +1,16 @@
+#!/bin/sh
+
+cat *.md \
+| sed -e's/<!-- "/\n* /g' \
+| sed -e's/" -->//g' \
+| sed -e's/<h2/**/g' \
+| sed -e's/##/**/g' \
+| sed -e's/<h3/***/g' \
+| sed -e's/###/***/g' \
+| sed -e's/<h4/****/g' \
+| sed -e's/####/****/g' \
+| sed -e's/<h5/*****/g' \
+| sed -e's/#####/*****/g' \
+| sed -e 's/<a href="#heading--[A-Za-z0-9-]*">//g' \
+| sed -e's/id="heading--[A-Za-z0-9-]*">//g' \
+| sed -e's/<\/h[0-9]*><\/a>//g'
