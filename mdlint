@@ -1,0 +1,33 @@
+#!/usr/bin/python3
+
+import sys;
+
+### lint headings
+# read in stdin
+file_contents = sys.stdin.read()
+
+file_lines = file_contents.split("\n")
+
+for i in file_lines:
+    if '#heading' in i:
+        hline = i.split("\"")
+        heading = []
+        for k in hline:
+            if 'heading' in k:
+                heading.append(k)
+        if len(heading) == 2:
+            if heading[0] != '#'+heading[1]:
+                print(heading, "is in error")
+                
+# pull out all lines with "#heading"
+# compute "#heading" "heading" and heading text
+# compare #heading with heading.  match?  if not, print error.
+# compare heading text to #heading/heading.  match?  if not, print error.
+### lint internal links
+# pull out all links
+# compute filename for link
+# does file exist in cwd?  if not, print error
+# is file an anchored link?
+## read referenced file
+## does referenced file have mentioned #heading?
+## if not, print error
