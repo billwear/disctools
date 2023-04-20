@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 #imports
-import sys,re;
+import sys,re,glob;
 
 #regexes
 anchor_re = re.compile('\[[^\]]*\]\(#heading--[^\)]*\)')
@@ -11,6 +11,13 @@ extlink_re = re.compile('\[[^\]]*\]\(http[^\)]*\)')
 html_heading_re = re.compile('<a href="[^"]*"><h[0-9].*')
 md_heading_re = re.compile('##[#]*.*')
 version_re = re.compile('v[0-9].[0-9] [a-zA-Z]*')
+heading_id_re = re.compile('id="([^"]*)"')
+anchor_id_re = re.compile('\(#(heading--[^)]*)\)')
+heading_href_re = re.compile('href="#(heading--[^"]*)"')
+
+# globals
+messages = []
+versions_reqd = ["v3.4 Snap","v3.4 Packages","v3.3 Snap","v3.3 Packages","v3.2 Snap","v3.2 Packages","v3.1 Snap","v3.1 Packages","v3.0 Snap","v3.0 Packages","v2.9 Snap","v2.9 Packages"]
 
 #validate command line args
 if len(sys.argv) != 2:
@@ -21,6 +28,7 @@ if len(sys.argv) != 2:
 f = open(sys.argv[1])
 buffer = f.read()
 
+#parse important markdown elements to check
 anchors = anchor_re.findall(buffer)
 doclinks = doclink_re.findall(buffer)
 ref_topics = list(dict.fromkeys(ref_topics_re.findall(buffer)))
@@ -28,65 +36,35 @@ extlinks = extlink_re.findall(buffer)
 html_headings = html_heading_re.findall(buffer)
 md_headings = md_heading_re.findall(buffer)
 versions_listed = list(dict.fromkeys(version_re.findall(buffer)))
-print(ref_topics)
-exit(0)
+anchor_ids = list(dict.fromkeys(anchor_id_re.findall(buffer)))
+heading_ids = list(dict.fromkeys(heading_id_re.findall(buffer)))
+heading_hrefs = heading_href_re.findall(buffer)
 
-#sort elements
-for i in buffer:
-    if '<h2' in i:
-        h2.append(i)
-    elif '<h3' in i:
-        h3.append(i)
-    elif '<h4' in i:
-        h4.append(i)
-    elif '](#' in i:
-        # split string on '[' and take the 1th part
-        # split 1th string on ')' and take the 0th part as an anchor
-        # take 1th string from second split and try to split on '[' again
-        # how do i know if it works?
-        anchors = i.split('[')
-        print(i)
-        print(anchors)
-        anchors.append(i)
-    elif '](/t' in i:
-        doclinks.append(i)
-    elif '](' in i:
-        extlinks.append(i)
+#make sure all internal anchors are actually in the document
+for i in anchor_ids:
+    if heading_ids.count(i) < 1:
+        print("> anchor",i,"has no target")
 
-# print(h2)
-# print(h3)
-# print(h4)
-# print(extlinks)
-# print(doclinks)
-# print(anchors)
-exit();
+#make sure all href heading ids match heading ids
+for i in heading_hrefs:
+    if heading_ids.count(i) < 1:
+        print("> heading href",i,"doesn't match the heading id")
+        
+#make sure all topics correspond to an existing file
+for i in ref_topics:
+    if len(glob.glob("*"+i+".md")) == 0:
+        print("> doc references topic number",i,"not found in fileset")
 
-### lint headings
-# read in stdin
-file_contents = sys.stdin.read()
+#make sure all current versions are listed in tabs, if there are any tabs
+if len(versions_listed) != 0:
+    for i in versions_reqd:
+        if versions_listed.count(i) < 1:
+            print("> version",i,"is not represented in tabs")
 
-file_lines = file_contents.split("\n")
+#warn about any markdown ("###") headings
+if len(md_headings) != 0:
+    for i in md_headings:
+        print("> file has non-anchored heading",i)
 
-for i in file_lines:
-    if '#heading' in i:
-        hline = i.split("\"")
-        heading = []
-        for k in hline:
-            if 'heading' in k:
-                heading.append(k)
-        if len(heading) == 2:
-            if heading[0] != '#'+heading[1]:
-                print(heading, "is in error")
-                
-# pull out all lines with "#heading"
-# compute "#heading" "heading" and heading text
-# compare #heading with heading.  match?  if not, print error.
-# compare heading text to #heading/heading.  match?  if not, print error.
-### lint internal links
-# pull out all links
-# compute filename for link
-# does file exist in cwd?  if not, print error
-# is file an anchored link?
-## read referenced file
-## does referenced file have mentioned #heading?
-## if not, print error
+#make sure anchor refs correspond to anchor ids
+
