@@ -1,6 +1,65 @@
 #!/usr/bin/python3
 
-import sys;
+#imports
+import sys,re;
+
+#regexes
+anchor_re = re.compile('\[[^\]]*\]\(#heading--[^\)]*\)')
+doclink_re = re.compile('\[[^\]]*\]\(/t/[^\)]*\)')
+ref_topics_re = re.compile('/t/[^/]*/([0-9]*)')
+extlink_re = re.compile('\[[^\]]*\]\(http[^\)]*\)')
+html_heading_re = re.compile('<a href="[^"]*"><h[0-9].*')
+md_heading_re = re.compile('##[#]*.*')
+version_re = re.compile('v[0-9].[0-9] [a-zA-Z]*')
+
+#validate command line args
+if len(sys.argv) != 2:
+    print("usage: mdlint markdown-filename")
+    exit(1)
+
+#read in the markdown file
+f = open(sys.argv[1])
+buffer = f.read()
+
+anchors = anchor_re.findall(buffer)
+doclinks = doclink_re.findall(buffer)
+ref_topics = list(dict.fromkeys(ref_topics_re.findall(buffer)))
+extlinks = extlink_re.findall(buffer)
+html_headings = html_heading_re.findall(buffer)
+md_headings = md_heading_re.findall(buffer)
+versions_listed = list(dict.fromkeys(version_re.findall(buffer)))
+print(ref_topics)
+exit(0)
+
+#sort elements
+for i in buffer:
+    if '<h2' in i:
+        h2.append(i)
+    elif '<h3' in i:
+        h3.append(i)
+    elif '<h4' in i:
+        h4.append(i)
+    elif '](#' in i:
+        # split string on '[' and take the 1th part
+        # split 1th string on ')' and take the 0th part as an anchor
+        # take 1th string from second split and try to split on '[' again
+        # how do i know if it works?
+        anchors = i.split('[')
+        print(i)
+        print(anchors)
+        anchors.append(i)
+    elif '](/t' in i:
+        doclinks.append(i)
+    elif '](' in i:
+        extlinks.append(i)
+
+# print(h2)
+# print(h3)
+# print(h4)
+# print(extlinks)
+# print(doclinks)
+# print(anchors)
+exit();
 
 ### lint headings
 # read in stdin
