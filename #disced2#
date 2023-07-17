@@ -1,0 +1,120 @@
+#!/bin/bash
+
+# Function for displaying usage message
+usage() {
+    echo "disced -m <markdown_filename> -sdn -v <version_number> -p <base_path>"
+    echo "   -s = use last staged version of document"
+    echo "   -d = don't edit the document"
+    echo "   -n = don't publish the document"
+}
+
+# Function for switching to live docs
+switchToLiveDocs() {
+    window.location.href="https://maas.io/docs"
+}
+
+# Function for initializing script options
+initOptions() {
+    while getopts m:sdv:p:nh flag; do
+        case "$flag" in
+            m) GIT_MD_BASENAME=$OPTARG ;;
+            s) rescue_staged=true ;;
+            d) do_edit=false ;;
+            v) VERSION=$OPTARG ;;
+            p) BASE_PATH=$OPTARG ;;
+            n) dont_publish=true ;;
+            h) usage
+               exit ;;
+        esac
+    done
+}
+
+# Function for processing markdown files
+processMarkdown() {
+    # Add your markdown processing logic here
+    # ...
+
+    echo "Markdown processing completed"
+}
+
+# Function for generating HTML files
+generateHTML() {
+    # Add your HTML generation logic here
+    # ...
+
+    echo "HTML generation completed"
+}
+
+# Function for updating Git repository
+updateGitRepo() {
+    # Add your Git repository update logic here
+    # ...
+
+    echo "Git repository updated"
+}
+
+# Entry point of the script
+main() {
+    # Presets and default values
+    rescue_staged=false
+    dont_publish=false
+    do_edit=true
+
+    # Set default values
+    VERSION="3.4"
+    REPO="$VERSION"
+    BASE_PATH="/home/stormrider/src/maas-doc"
+    BENCH="/tmp/bench"
+    STAGE="/tmp/staging"
+    GALLEY="4917"
+    LOG="$STAGE/log/tab2html.log"
+    
+    # Initialize options
+    initOptions "$@"
+
+    # Compute variables and perform necessary operations
+    GIT_MD_ABSPATH="$BASE_PATH/$REPO/src/$GIT_MD_BASENAME"
+    echo "GIT_MD_ABSPATH: $GIT_MD_ABSPATH"
+
+    GIT_MD_DIR="${GIT_MD_ABSPATH%/*}"
+    echo "GIT_MD_DIR: $GIT_MD_DIR"
+
+    GIT_REPO_ROOT="$(dirname "$GIT_MD_DIR")"
+    echo "GIT_REPO_ROOT: $GIT_REPO_ROOT"
+
+    NAME="${GIT_MD_BASENAME%.*}"
+    echo "NAME: $NAME"
+
+    TOPIC_NUMBER="${NAME##*-}"
+    echo "TOPIC_NUMBER: $TOPIC_NUMBER"
+
+    exit(0)
+    GIT_MD_ABSPATH="$BASE_PATH/$REPO/src/$GIT_MD_BASENAME"
+    GIT_MD_DIR="${GIT_MD_ABSPATH%/*}"
+    GIT_REPO_ROOT="$(dirname "$GIT_MD_DIR")"
+    NAME="${GIT_MD_BASENAME%.*}"
+    TOPIC_NUMBER="${NAME##*-}"    
+
+    exit(0)   
+
+    if $rescue_staged ; then
+	echo "Subtituing previously staged file for git original"
+	GIT_MD_ABSPATH="$STAGE/$GIT_MD_BASENAME"
+    fi
+
+    if $do_edit; then
+        processMarkdown
+        generateHTML
+
+        if ! $dont_publish; then
+            updateGitRepo
+        fi
+    fi
+
+    # ...
+
+    echo "Script execution completed"
+}
+
+# Call the main function
+main "$@"

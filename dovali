@@ -2,7 +2,7 @@
 # 
 
 usage() {
-    echo "Usage: disced -m <filename> -v <html_version> -b <branch> [options]"
+    echo "Usage: dovali -m <filename> -v <html_version> -b <branch> [options]"
     echo
     echo "Options:"
     echo "  -h                    Show this help message and exit"
